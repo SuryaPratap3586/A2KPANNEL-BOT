@@ -1,0 +1,228 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  INSTAGRAM
+  YOUTUBE
+  FACEBOOK
+  SHARECHAT
+  MOJ
+  TIKTOK
+  OTHER
+}
+enum Review {
+  PENDING
+  APPROVED
+  REJECTED
+}
+enum AccountState {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+enum PayState {   // UI: Pending / In progress / Complete / Rejected
+  PENDING
+  PROCESSING
+  PAID
+  REJECTED
+}
+enum Lang {
+  EN
+  HI
+}
+enum AdminRole {   // SUPER = everything; ADMIN = video moderation only
+  SUPER
+  ADMIN
+}
+
+model Admin {
+  id           String    @id @default(cuid())
+  name         String    @default("Admin")
+  email        String    @unique
+  passwordHash String
+  role         AdminRole @default(ADMIN)
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  reviewed     Video[]
+  viewActions  ViewHistory[]
+}
+
+model Agent {
+  id          String       @id @default(cuid())
+  name        String
+  tokenHash   String       @unique            // sha256 of login token (plain token shown once)
+  telegramId  BigInt?      @unique            // bound on first login
+  bankDetails String?
+  lang        Lang         @default(EN)
+  status      AccountState @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  bloggers    Blogger[]
+  links       ReferralLink[]
+  payments    Withdrawal[]
+  adjustments Adjustment[]
+}
+
+model ReferralLink {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
+// 1 Telegram account = 1 Blogger = 1 Agent (telegramId unique)
+model Blogger {
+  id             String       @id @default(cuid())
+  telegramId     BigInt       @unique
+  name           String
+  username       String?
+  paymentDetails String?
+  agentId        String?                       // optional: /start alone registers; agent link assigns an agent
+  agent          Agent?       @relation(fields: [agentId], references: [id])
+  agentBonus     Decimal      @default(0) @db.Decimal(10, 2)  // what the agent earned for adding this blogger (admin-editable)
+  lang           Lang         @default(EN)
+  status         AccountState @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  accounts       SocialAccount[]
+  videos         Video[]
+  withdrawals    Withdrawal[]
+  adjustments    Adjustment[]
+  reposts        Repost[]
+}
+
+model SocialAccount {
+  id        String   @id @default(cuid())
+  bloggerId String
+  blogger   Blogger  @relation(fields: [bloggerId], references: [id])
+  platform  Platform
+  url       String
+  status    Review   @default(PENDING)
+  ref       String?                             // normalized username / channel id, used to check video ownership
+  createdAt DateTime @default(now())
+  videos    Video[]
+  @@unique([bloggerId, platform, url])
+  @@index([platform, ref])
+}
+
+model Video {
+  id           String   @id @default(cuid())
+  bloggerId    String
+  blogger      Blogger  @relation(fields: [bloggerId], references: [id])
+  platform     Platform
+  url          String   @unique               // duplicate protection
+  status       Review   @default(PENDING)
+  rejectReason String?
+  reviewedById String?                         // which admin approved / rejected
+  reviewedBy   Admin?   @relation(fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+  views        Int      @default(0)           // PAYABLE views (admin can edit); earnings use this
+  liveViews    Int      @default(0)           // actual views fetched from the platform
+  likes        Int      @default(0)
+  comments     Int      @default(0)
+  viewsEdited  Boolean  @default(false)       // true = admin typed the payable views, fetch will not overwrite them
+  accountId    String?
+  account      SocialAccount? @relation(fields: [accountId], references: [id])
+  ownerVerified Boolean @default(false)       // video was matched to one of the blogger's linked accounts
+  weekStart    DateTime @default(now())       // Monday 00:00 IST of the submission week
+  frozen       Boolean  @default(false)       // 7-day tracking finished (Saturday 23:59 IST)
+  lastFetchedAt DateTime?
+  earnings     Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt    DateTime @default(now())
+  history      ViewHistory[]
+  stats        VideoStat[]
+  reposts      Repost[]
+  @@index([bloggerId, status])
+  @@index([status, frozen])
+}
+
+model ViewHistory {
+  id        String   @id @default(cuid())
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id])
+  views     Int
+  rate      Decimal  @db.Decimal(10, 2)       // Rs per million snapshot => old earnings never change
+  earned    Decimal  @db.Decimal(14, 2)
+  source    String                              // AUTO (cron) | FETCH (admin pressed fetch) | MANUAL (admin typed)
+  delta     Int      @default(0)                // views added (+) or corrected (-) by this change
+  actorId   String?
+  actor     Admin?   @relation(fields: [actorId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Rate {
+  platform   Platform @id
+  perMillion Decimal  @default(800) @db.Decimal(10, 2)   // Rs per 1,000,000 views
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+// Payment request from a blogger OR an agent
+model Withdrawal {
+  id        String   @id @default(cuid())
+  bloggerId String?
+  blogger   Blogger? @relation(fields: [bloggerId], references: [id])
+  agentId   String?
+  agent     Agent?   @relation(fields: [agentId], references: [id])
+  amount    Decimal  @db.Decimal(14, 2)
+  details   String
+  status    PayState @default(PENDING)
+  note      String?                            // admin note / rejection reason
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status])
+}
+
+// Manual +/- balance correction by admin
+model Adjustment {
+  id        String   @id @default(cuid())
+  bloggerId String?
+  blogger   Blogger? @relation(fields: [bloggerId], references: [id])
+  agentId   String?
+  agent     Agent?   @relation(fields: [agentId], references: [id])
+  amount    Decimal  @db.Decimal(14, 2)
+  reason    String
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String
+  action    String
+  detail    String?
+  createdAt DateTime @default(now())
+}
+
+// One row per video per day (IST): views / likes / comments for the 7-day day-wise table. Rows older than 14 days are deleted.
+model VideoStat {
+  id        String   @id @default(cuid())
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  day       DateTime @db.Date
+  liveViews Int      @default(0)
+  payViews  Int      @default(0)
+  likes     Int      @default(0)
+  comments  Int      @default(0)
+  @@unique([videoId, day])
+  @@index([day])
+}
+
+// A blogger submitted a link that already exists
+model Repost {
+  id         String   @id @default(cuid())
+  bloggerId  String
+  blogger    Blogger  @relation(fields: [bloggerId], references: [id])
+  url        String
+  originalId String?
+  original   Video?   @relation(fields: [originalId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  @@index([bloggerId, createdAt])
+}
