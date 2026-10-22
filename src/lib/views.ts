@@ -13,13 +13,19 @@ export async function applyViews(
   keepEdited = false,
 ) {
   await db.$transaction(async (tx) => {
-    const v = await tx.video.findUnique({ where: { id: videoId } });
+    const v = await tx.video.findUnique({
+      where: { id: videoId },
+      include: { blogger: { include: { agent: { include: { plan: true } } } } },
+    });
     if (!v || v.status !== "APPROVED" || newViews === v.views) return;
     if (source !== "MANUAL" && newViews < v.views) return;
-    const rate = Number(
+    const platformRate = Number(
       (await tx.rate.findUnique({ where: { platform: v.platform } }))
         ?.perMillion ?? 800,
     );
+    const rate = Number(
+      v.blogger.agent?.plan?.bloggerPerMillion ?? platformRate,
+    ); // the agent's plan (D / S) decides the blogger rate; no plan = platform rate
     const delta = newViews - v.views;
     const earned = Math.round((delta / 1_000_000) * rate * 100) / 100;
     await tx.video.update({

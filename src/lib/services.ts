@@ -46,7 +46,7 @@ export async function registerBlogger(
     code && /^[A-Za-z0-9_-]{6,40}$/.test(code)
       ? await db.referralLink.findUnique({
           where: { code },
-          include: { agent: true },
+          include: { agent: { include: { plan: true } } },
         })
       : null;
   const valid = !!link && !link.usedAt && link.agent.status === "ACTIVE";
@@ -62,9 +62,11 @@ export async function registerBlogger(
         });
         if (u.count === 1) {
           agentId = link!.agentId;
-          bonus = await getAgentBonus(tx);
+          bonus = link!.agent.plan
+            ? Number(link!.agent.plan.agentBonus)
+            : await getAgentBonus(tx);
           assigned = true;
-        }
+        } // bonus comes from the agent's plan (D / S)
       }
       return tx.blogger.create({
         data: {
@@ -91,9 +93,13 @@ export async function registerBlogger(
 export async function createReferral(agentId: string) {
   const code = randomToken(9);
   await db.referralLink.create({ data: { code, agentId } });
+  const ag = await db.agent.findUnique({
+    where: { id: agentId },
+    include: { plan: true },
+  });
   return {
     url: `https://t.me/${process.env.BLOGGER_BOT_USERNAME}?start=${code}`,
-    bonus: await getAgentBonus(),
+    bonus: ag?.plan ? Number(ag.plan.agentBonus) : await getAgentBonus(),
   };
 }
 
@@ -371,7 +377,10 @@ export async function bloggerData(id: string) {
 }
 
 export async function agentData(id: string) {
-  const a = await db.agent.findUniqueOrThrow({ where: { id } });
+  const a = await db.agent.findUniqueOrThrow({
+    where: { id },
+    include: { plan: true },
+  });
   const mine = { blogger: { agentId: id } };
   const [bloggers, videos, pays, balance, bonusAgg] = await Promise.all([
     db.blogger.findMany({
@@ -404,7 +413,7 @@ export async function agentData(id: string) {
     balance,
     payDetails: a.bankDetails ?? "",
     earnings: num(bonusAgg._sum.agentBonus),
-    bonus: await getAgentBonus(),
+    bonus: a.plan ? Number(a.plan.agentBonus) : await getAgentBonus(),
     minWithdraw: MIN_WITHDRAW(),
     bloggers: bloggers.map((b) => ({
       id: b.id,

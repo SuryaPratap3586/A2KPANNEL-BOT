@@ -65,6 +65,8 @@ model Agent {
   links       ReferralLink[]
   payments    Withdrawal[]
   adjustments Adjustment[]
+  planId      String?                       // pricing plan: decides the agent bonus and the blogger rate (D / S)
+  plan        Plan?        @relation(fields: [planId], references: [id])
 }
 
 model ReferralLink {
@@ -225,4 +227,14 @@ model Repost {
   original   Video?   @relation(fields: [originalId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
   @@index([bloggerId, createdAt])
+}
+
+// Pricing plan. The agent's plan decides what the agent earns per blogger and what that agent's bloggers earn per 1,000,000 views.
+model Plan {
+  id                String  @id @default(cuid())
+  code              String  @unique                 // mark shown next to agents and bloggers in the admin panel, e.g. "D" or "S"
+  name              String
+  agentBonus        Decimal @db.Decimal(10, 2)      // Rs the agent earns for every blogger who joins
+  bloggerPerMillion Decimal @db.Decimal(10, 2)      // Rs the blogger earns per 1,000,000 adjusted views (all platforms)
+  agents            Agent[]
 }

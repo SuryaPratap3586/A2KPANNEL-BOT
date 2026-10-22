@@ -250,6 +250,7 @@ type CreateAgentState = {
   token: string | null;
   error?: string;
   linked?: boolean;
+  plan?: string;
 };
 
 // Telegram ID is optional. With an ID the agent only needs /start in the agent bot; the token still works too.
@@ -273,17 +274,29 @@ export async function createAgent(
       token: null,
       error: "Another agent already uses this Telegram ID.",
     };
+  const planId = String(fd.get("planId") ?? "");
+  const plan = planId
+    ? await db.plan.findUnique({ where: { id: planId } })
+    : null;
+  if (planId && !plan) return { token: null, error: "Plan not found." };
   const token = "AGT-" + randomToken(18); // shown ONCE, only hash stored
   const a = await db.agent.create({
     data: {
       name,
       tokenHash: sha256(token),
       telegramId: rawId ? BigInt(rawId) : null,
+      planId: plan?.id,
     },
   });
   await log(me.email, "AGENT_CREATED", `${a.id}${rawId ? " tg=" + rawId : ""}`);
   revalidatePath("/admin/agents");
-  return { token, linked: !!rawId };
+  return {
+    token,
+    linked: !!rawId,
+    plan: plan
+      ? `${plan.code}: agent Rs ${plan.agentBonus} per blogger, blogger Rs ${plan.bloggerPerMillion} per million views`
+      : undefined,
+  };
 }
 
 export async function setAgentTelegramId(fd: FormData) {
@@ -413,9 +426,20 @@ export async function assignAgent(fd: FormData) {
   const bid = id.parse(fd.get("id"));
   const raw = String(fd.get("agentId") ?? "");
   const agentId = raw ? id.parse(raw) : null;
+  const ag = agentId
+    ? await db.agent.findUnique({
+        where: { id: agentId },
+        include: { plan: true },
+      })
+    : null;
+  const bonus = ag
+    ? ag.plan
+      ? Number(ag.plan.agentBonus)
+      : await getAgentBonus()
+    : 0; // bonus from the new agent's plan
   await db.blogger.update({
     where: { id: bid },
-    data: { agentId, agentBonus: agentId ? await getAgentBonus() : 0 },
+    data: { agentId, agentBonus: bonus },
   });
   await log(me.email, "BLOGGER_AGENT_SET", `${bid} -> ${agentId ?? "none"}`);
   revalidatePath("/admin/bloggers");
@@ -467,4 +491,72 @@ export async function setAgentBonusDefault(fd: FormData) {
   });
   await log(me.email, "AGENT_BONUS_DEFAULT", String(v)); // applies to bloggers who join from now on
   revalidatePath("/admin/rates");
+}
+
+// Pricing plans (D / S): the plan of an agent decides the agent bonus per blogger and the blogger rate per million views
+export async function setAgentPlan(fd: FormData) {
+  const me = await requireSuper();
+  const agentId = id.parse(fd.get("id"));
+  const raw = String(fd.get("planId") ?? "");
+  const planId = raw ? id.parse(raw) : null;
+  await db.agent.update({ where: { id: agentId }, data: { planId } });
+  await log(me.email, "AGENT_PLAN_SET", `${agentId} -> ${planId ?? "none"}`); // applies to new bloggers and new views; old earnings stay as they are
+  revalidatePath("/admin/agents");
+  revalidatePath("/admin/bloggers");
+}
+
+export async function savePlan(fd: FormData) {
+  const me = await requireSuper();
+  const pid = id.parse(fd.get("id"));
+  const name = z.string().trim().min(1).max(40).parse(fd.get("name"));
+  const agentBonus = z.coerce
+    .number()
+    .min(0)
+    .max(100000)
+    .parse(fd.get("agentBonus"));
+  const bloggerPerMillion = z.coerce
+    .number()
+    .min(0)
+    .max(10_000_000)
+    .parse(fd.get("bloggerPerMillion"));
+  await db.plan.update({
+    where: { id: pid },
+    data: { name, agentBonus, bloggerPerMillion },
+  });
+  await log(
+    me.email,
+    "PLAN_EDIT",
+    `${pid} bonus=${agentBonus} rate=${bloggerPerMillion}`,
+  );
+  revalidatePath("/admin/rates");
+  revalidatePath("/admin/agents");
+}
+
+export async function createPlan(fd: FormData) {
+  const me = await requireSuper();
+  const code = z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9]{1,3}$/, "Mark must be 1 to 3 letters or numbers")
+    .safeParse(fd.get("code"));
+  if (!code.success) back("/admin/rates", code.error.issues[0].message);
+  const name = z.string().trim().min(1).max(40).parse(fd.get("name"));
+  const agentBonus = z.coerce
+    .number()
+    .min(0)
+    .max(100000)
+    .parse(fd.get("agentBonus"));
+  const bloggerPerMillion = z.coerce
+    .number()
+    .min(0)
+    .max(10_000_000)
+    .parse(fd.get("bloggerPerMillion"));
+  if (await db.plan.findUnique({ where: { code: code.data! } }))
+    back("/admin/rates", "A plan with this mark already exists.");
+  await db.plan.create({
+    data: { code: code.data!, name, agentBonus, bloggerPerMillion },
+  });
+  await log(me.email, "PLAN_CREATED", code.data!);
+  back("/admin/rates", "Plan created.");
 }

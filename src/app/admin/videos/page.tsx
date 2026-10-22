@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { pageStaff } from "@/lib/auth";
+import PlanBadge from "../PlanBadge";
 import {
   reviewVideo,
   setViews,
@@ -36,7 +37,10 @@ export default async function Videos({
   const list = isVideoTab
     ? await db.video.findMany({
         where: { status: tab as "PENDING" },
-        include: { blogger: { include: { agent: true } }, reviewedBy: true },
+        include: {
+          blogger: { include: { agent: { include: { plan: true } } } },
+          reviewedBy: true,
+        },
         orderBy: { createdAt: tab === "PENDING" ? "asc" : "desc" },
         take: 150,
       })
@@ -139,7 +143,8 @@ export default async function Videos({
                   <td>
                     {v.blogger.name}
                     <div className="text-xs text-slate-500">
-                      Agent: {v.blogger.agent?.name ?? "—"}
+                      Agent: {v.blogger.agent?.name ?? "—"}{" "}
+                      <PlanBadge code={v.blogger.agent?.plan?.code} />
                     </div>
                   </td>
                   <td>{v.platform}</td>

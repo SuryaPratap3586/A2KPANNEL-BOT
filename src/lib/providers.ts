@@ -1,6 +1,7 @@
 // Fetches owner + views / likes / comments for ONE video link.
 //   YouTube   -> official YouTube Data API v3 (YOUTUBE_API_KEY)
-//   Instagram -> Apify actor (RAPIDAPI_TOKEN)   Facebook -> Apify actor (RAPIDAPI_TOKEN)
+//   Instagram -> RapidAPI (RAPIDAPI_KEY + RAPIDAPI_HOST), else Apify (APIFY_TOKEN)
+//   Facebook  -> Apify (APIFY_TOKEN)
 // Meta does not give public view counts for other people's reels through an official API, so a data provider is used.
 import { Platform } from "@prisma/client";
 
@@ -14,6 +15,9 @@ const lc = (s: unknown) =>
   String(s ?? "")
     .trim()
     .toLowerCase();
+const debug = (...a: unknown[]) => {
+  if (process.env.PROVIDER_DEBUG === "true") console.log("[provider]", ...a);
+}; // never prints keys or tokens
 
 async function http(url: string, init?: RequestInit, ms = 20_000) {
   const c = new AbortController(),
@@ -85,29 +89,35 @@ function pick(f: Record<string, unknown>, res: RegExp[]) {
       }
 }
 
-/** Reads the different field names used by Instagram / Facebook actors (flat or nested). */
+/** Reads the different field names used by Instagram / Facebook data providers (flat or nested). */
 export function mapItem(item: any): VideoInfo {
   const f = flat(item);
   const views = pick(f, [
     /videoPlayCount$/i,
+    /(^|\.)video_play_count$/i,
+    /(^|\.)ig_play_count$/i,
     /(^|\.)(playCount|plays|play_count)$/i,
-    /(^|\.)(viewCount|view_count|viewsCount|videoViewCount)$/i,
+    /(^|\.)(viewCount|view_count|viewsCount|videoViewCount|video_view_count)$/i,
     /(^|\.)views$/i,
   ]);
   const likes = pick(f, [
     /(likesCount|likeCount|like_count)$/i,
+    /edge_media_preview_like\.count$/i,
+    /edge_liked_by\.count$/i,
     /(^|\.)likes$/i,
     /reactionCount$/i,
   ]);
   const comments = pick(f, [
     /(commentsCount|commentCount|comment_count)$/i,
+    /edge_media_to_parent_comment\.count$/i,
+    /edge_media_to_comment\.count$/i,
     /(^|\.)comments$/i,
   ]);
   const owners = new Set<string>();
   for (const [k, v] of Object.entries(f)) {
+    if (typeof v !== "string") continue;
     if (
-      typeof v !== "string" ||
-      !/(ownerUsername|owner\.username|owner\.url|owner\.id|ownerProfileUrl|author\.(name|url|id|username)|pageName|pageUrl|(^|\.)username)$/i.test(
+      !/(^(owner|user)\.username$|^username$|(^|\.)ownerUsername$|(^|\.)ownerProfileUrl$|owner\.url$|author\.(name|url|id|username)$|pageName$|pageUrl$)/i.test(
         k,
       )
     )
@@ -124,11 +134,36 @@ export function mapItem(item: any): VideoInfo {
   return { owners: [...owners].filter(Boolean), views, likes, comments };
 }
 
+/** Instagram via RapidAPI. Defaults fit "post by url" style APIs; change RAPIDAPI_PATH / RAPIDAPI_URL_PARAM to match the endpoint you subscribed to. */
+async function rapid(
+  platform: Platform,
+  url: string,
+): Promise<VideoInfo | null> {
+  const key = process.env.RAPIDAPI_KEY,
+    host = process.env.RAPIDAPI_HOST;
+  if (!key || !host || platform !== "INSTAGRAM") return null;
+  const path = process.env.RAPIDAPI_PATH || "/post";
+  const param = process.env.RAPIDAPI_URL_PARAM || "url";
+  const r = await http(
+    `https://${host}${path}?${param}=${encodeURIComponent(url)}`,
+    { headers: { "x-rapidapi-key": key, "x-rapidapi-host": host } },
+    25_000,
+  );
+  debug("rapidapi status", r.status);
+  if (!r.ok) return null;
+  const j = await r.json().catch(() => null);
+  const root = j?.data ?? j?.result ?? j;
+  const item = Array.isArray(root) ? root[0] : (root?.items?.[0] ?? root);
+  if (!item) return null;
+  debug("rapidapi fields", Object.keys(flat(item)).slice(0, 80));
+  return mapItem(item);
+}
+
 async function apify(
   platform: Platform,
   url: string,
 ): Promise<VideoInfo | null> {
-  const token = process.env.RAPIDAPI_TOKEN;
+  const token = process.env.APIFY_TOKEN;
   if (!token) return null;
   const ig = platform === "INSTAGRAM";
   const actor =
@@ -156,6 +191,7 @@ async function apify(
     },
     75_000,
   );
+  debug("apify status", r.status);
   if (!r.ok) return null;
   const items = await r.json();
   return Array.isArray(items) && items.length ? mapItem(items[0]) : null;
@@ -166,7 +202,8 @@ export async function getVideoInfo(
   url: string,
 ): Promise<VideoInfo | null> {
   if (platform === "YOUTUBE") return youtube(url);
-  if (platform === "INSTAGRAM" || platform === "FACEBOOK")
-    return apify(platform, url);
+  if (platform === "INSTAGRAM")
+    return (await rapid(platform, url)) ?? apify(platform, url);
+  if (platform === "FACEBOOK") return apify(platform, url);
   return null; // ShareChat / Moj / TikTok / Other: admin types views
 }
