@@ -42,6 +42,12 @@ export default function MiniApp() {
       body: JSON.stringify({ initData: tg?.initData ?? "", ...body }),
     });
     const j = await r.json().catch(() => ({}));
+    if (r.status === 403 && j.error === "access denied") {
+      setErr(
+        "⛔ Access denied. This Telegram account is registered as an agent.",
+      );
+      return false;
+    }
     if (r.status === 401 || r.status === 403) {
       setErr("Open this page from the Telegram bot (Open App button).");
       return false;
@@ -112,6 +118,25 @@ export default function MiniApp() {
     </span>
   );
   const Empty = () => <p style={{ opacity: 0.6 }}>{t("noData")}</p>;
+  // Link given by the admin: the blogger must add it to his social media account
+  const LinkCard = () =>
+    d.assignedLink ? (
+      <div style={{ ...box, border: "1px solid #f2b705" }}>
+        <b>🔗 {t("addLinkTitle")}</b>
+        <div style={{ wordBreak: "break-all", margin: "6px 0" }}>
+          {d.assignedLink}
+        </div>
+        <button
+          style={btn}
+          onClick={() => {
+            navigator.clipboard?.writeText(d.assignedLink);
+            setMsg("✅ " + t("copied"));
+          }}
+        >
+          {t("copy")}
+        </button>
+      </div>
+    ) : null;
 
   return (
     <main
@@ -145,6 +170,7 @@ export default function MiniApp() {
           </div>
           {msg && <p>{msg}</p>}
 
+          {tab === "home" && isB && <LinkCard />}
           {tab === "home" && (
             <div style={box}>
               {isB ? (
@@ -285,6 +311,7 @@ export default function MiniApp() {
 
           {tab === "accounts" && isB && (
             <>
+              <LinkCard />
               <div style={box}>
                 <select id="ap" style={inp}>
                   {PLATFORMS.map((p) => (
@@ -337,6 +364,13 @@ export default function MiniApp() {
                     >
                       {a.url}
                     </div>
+                    {a.status === "REJECTED" && a.reason && (
+                      <div
+                        style={{ fontSize: 13, color: "#c53030", marginTop: 4 }}
+                      >
+                        {a.reason}
+                      </div>
+                    )}
                   </div>
                 ))
               ) : (
@@ -373,7 +407,10 @@ export default function MiniApp() {
               {d.bloggers.length ? (
                 d.bloggers.map((b: any) => (
                   <div key={b.id} style={box}>
-                    <Row k={b.name} v={inr(b.bonus)} />
+                    <Row
+                      k={b.name}
+                      v={b.credited ? inr(b.bonus) : t("pending")}
+                    />
                     <div style={{ fontSize: 12, opacity: 0.7 }}>
                       {t("videos")}: {b.videos}
                     </div>

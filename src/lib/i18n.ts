@@ -24,7 +24,7 @@ const EN = {
   profileText:
     "👤 {name}\nBloggers: {n}\nBalance: ₹{bal}\nPayment details: {bank}",
   linkText:
-    "Send this one-time link to your blogger:\n{url}\nYou earn ₹{bonus} when they join.",
+    "Send this one-time link to your blogger:\n{url}\nYou earn ₹{bonus} once the blogger links an account and gets videos approved.",
   // mini app
   home: "Home",
   videos: "Videos",
@@ -49,7 +49,12 @@ const EN = {
   minWithdraw: "Minimum ₹{min}",
   noData: "Nothing here yet.",
   name: "Name",
-  perBlogger: "You earn ₹{bonus} per blogger",
+  perBlogger:
+    "You earn ₹{bonus} per blogger after the blogger's videos are approved",
+  accessDenied:
+    "⛔ Access denied. This Telegram account is registered as an agent, so it cannot be used as a blogger.",
+  underAgent: "👤 Your agent: {name}",
+  addLinkTitle: "Add this link in your social media account",
   newLink: "Create blogger link",
   copy: "Copy",
   copied: "Copied",
@@ -124,7 +129,7 @@ const HI: typeof EN = {
   notSet: "सेट नहीं है",
   profileText: "👤 {name}\nब्लॉगर: {n}\nबैलेंस: ₹{bal}\nपेमेंट डिटेल: {bank}",
   linkText:
-    "यह एक-बार वाला लिंक अपने ब्लॉगर को भेजें:\n{url}\nजुड़ने पर आपको ₹{bonus} मिलेंगे।",
+    "यह एक-बार वाला लिंक अपने ब्लॉगर को भेजें:\n{url}\nब्लॉगर के अकाउंट जोड़ने और वीडियो अप्रूव होने पर आपको ₹{bonus} मिलेंगे।",
   home: "होम",
   videos: "वीडियो",
   accounts: "अकाउंट",
@@ -148,7 +153,12 @@ const HI: typeof EN = {
   minWithdraw: "न्यूनतम ₹{min}",
   noData: "अभी कुछ नहीं है।",
   name: "नाम",
-  perBlogger: "हर ब्लॉगर पर आपको ₹{bonus} मिलते हैं",
+  perBlogger:
+    "ब्लॉगर की वीडियो अप्रूव होने के बाद हर ब्लॉगर पर आपको ₹{bonus} मिलते हैं",
+  accessDenied:
+    "⛔ एक्सेस नहीं मिलेगा। यह टेलीग्राम अकाउंट एजेंट के रूप में रजिस्टर है, इसलिए ब्लॉगर के रूप में इस्तेमाल नहीं हो सकता।",
+  underAgent: "👤 आपका एजेंट: {name}",
+  addLinkTitle: "इस लिंक को अपने सोशल मीडिया अकाउंट में जोड़ें",
   newLink: "ब्लॉगर लिंक बनाएं",
   copy: "कॉपी",
   copied: "कॉपी हो गया",

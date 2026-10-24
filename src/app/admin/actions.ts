@@ -14,6 +14,8 @@ import {
   resetToLive,
 } from "@/lib/views";
 import { getAgentBonus } from "@/lib/settings";
+import { agentBalance } from "@/lib/balance";
+import { creditEligible } from "@/lib/commission";
 import { tgSend } from "@/lib/notify";
 
 const id = z.string().cuid();
@@ -54,6 +56,8 @@ export async function reviewVideo(fd: FormData) {
       include: { blogger: true },
     });
     await log(me.email, "VIDEO_" + decision, vid);
+    if (decision === "APPROVED")
+      await creditEligible({ bloggerId: v.bloggerId }); // agent bonus is credited once the blogger qualifies
     await tgSend(
       process.env.BLOGGER_BOT_TOKEN,
       v.blogger.telegramId,
@@ -356,8 +360,24 @@ export async function reviewAccount(fd: FormData) {
   const me = await requireSuper();
   const aid = id.parse(fd.get("id"));
   const status = z.enum(["APPROVED", "REJECTED"]).parse(fd.get("decision"));
-  await db.socialAccount.update({ where: { id: aid }, data: { status } });
+  const reason =
+    status === "REJECTED"
+      ? z.string().trim().min(2).max(200).parse(fd.get("reason"))
+      : null; // rejecting needs a reason, the blogger sees it
+  const acc = await db.socialAccount.update({
+    where: { id: aid },
+    data: { status, rejectReason: reason },
+    include: { blogger: true },
+  });
   await log(me.email, "ACCOUNT_" + status, aid);
+  if (status === "APPROVED") await creditEligible({ bloggerId: acc.bloggerId });
+  await tgSend(
+    process.env.BLOGGER_BOT_TOKEN,
+    acc.blogger.telegramId,
+    status === "APPROVED"
+      ? `✅ Your ${acc.platform} account was approved:\n${acc.url}`
+      : `❌ Your ${acc.platform} account was rejected (${reason}):\n${acc.url}`,
+  );
   revalidatePath("/admin/accounts");
 }
 
@@ -442,6 +462,7 @@ export async function assignAgent(fd: FormData) {
     data: { agentId, agentBonus: bonus },
   });
   await log(me.email, "BLOGGER_AGENT_SET", `${bid} -> ${agentId ?? "none"}`);
+  if (agentId) await creditEligible({ bloggerId: bid });
   revalidatePath("/admin/bloggers");
 }
 
@@ -559,4 +580,86 @@ export async function createPlan(fd: FormData) {
   });
   await log(me.email, "PLAN_CREATED", code.data!);
   back("/admin/rates", "Plan created.");
+}
+
+// Rule: the agent bonus is credited when the blogger has an approved account and at least N approved videos
+export async function setBonusRule(fd: FormData) {
+  const me = await requireSuper();
+  const n = z.coerce.number().int().min(1).max(100).parse(fd.get("minVideos"));
+  await db.setting.upsert({
+    where: { key: "AGENT_BONUS_MIN_VIDEOS" },
+    update: { value: String(n) },
+    create: { key: "AGENT_BONUS_MIN_VIDEOS", value: String(n) },
+  });
+  const credited = await creditEligible();
+  await log(me.email, "BONUS_RULE", `min approved videos = ${n}`);
+  back("/admin/rates", `Saved. ${credited} blogger(s) newly credited.`);
+}
+
+// Weekly (Monday) agent payment: creates ONE payment for everything that is due to the agent. Mark it Complete on the Payments page after you pay.
+export async function createAgentPayout(fd: FormData) {
+  const me = await requireSuper();
+  const agentId = id.parse(fd.get("id"));
+  const a = await db.agent.findUnique({ where: { id: agentId } });
+  if (!a) back("/admin/agent-weekly", "Agent not found.");
+  await creditEligible({ agentId });
+  const due = Math.round((await agentBalance(agentId)) * 100) / 100;
+  if (due <= 0) back("/admin/agent-weekly", "Nothing is due for this agent.");
+  if (!a!.bankDetails)
+    back(
+      "/admin/agent-weekly",
+      "This agent has not saved payment details yet.",
+    );
+  await db.withdrawal.create({
+    data: {
+      agentId,
+      amount: due,
+      details: a!.bankDetails!,
+      status: "PROCESSING",
+      note: "Weekly payment created by admin",
+    },
+  });
+  await log(me.email, "AGENT_WEEKLY_PAYOUT", `${agentId} ${due}`);
+  if (a!.telegramId)
+    await tgSend(
+      process.env.AGENT_BOT_TOKEN,
+      a!.telegramId,
+      `💸 Your weekly payment of ₹${due} is being processed.`,
+    );
+  back(
+    "/admin/agent-weekly",
+    `Payment of ₹${due} created (In progress). Mark it Complete on the Payments page after you pay.`,
+  );
+}
+
+// The link the blogger has to add in his social media account (bio / profile). Empty = remove.
+export async function setBloggerLink(fd: FormData) {
+  const me = await requireSuper();
+  const bid = id.parse(fd.get("id"));
+  const raw = String(fd.get("link") ?? "").trim();
+  let link: string | null = null;
+  if (raw) {
+    try {
+      const u = new URL(raw);
+      if (u.protocol !== "https:" || raw.length > 500) throw new Error("bad");
+      link = u.toString();
+    } catch {
+      back(
+        "/admin/bloggers",
+        "The link must start with https:// and be a valid link.",
+      );
+    }
+  }
+  const b = await db.blogger.update({
+    where: { id: bid },
+    data: { assignedLink: link },
+  });
+  await log(me.email, "BLOGGER_LINK_SET", `${bid} -> ${link ?? "removed"}`);
+  if (link)
+    await tgSend(
+      process.env.BLOGGER_BOT_TOKEN,
+      b.telegramId,
+      `🔗 Add this link in your social media account:\n${link}`,
+    );
+  revalidatePath("/admin/bloggers");
 }

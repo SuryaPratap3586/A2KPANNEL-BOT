@@ -55,6 +55,14 @@ export async function POST(req: Request) {
 
   let who: { bloggerId?: string; agentId?: string };
   if (asBlogger) {
+    // a Telegram account that is registered as an agent cannot be used as a blogger
+    if (
+      await db.agent.findFirst({
+        where: { telegramId: BigInt(tg.id) },
+        select: { id: true },
+      })
+    )
+      return NextResponse.json({ error: "access denied" }, { status: 403 });
     const { blogger } = await svc.registerBlogger(tg); // opening the app also registers
     if (blogger.status !== "ACTIVE")
       return NextResponse.json({ error: "suspended" }, { status: 403 });

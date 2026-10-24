@@ -87,7 +87,9 @@ model Blogger {
   paymentDetails String?
   agentId        String?                       // optional: /start alone registers; agent link assigns an agent
   agent          Agent?       @relation(fields: [agentId], references: [id])
-  agentBonus     Decimal      @default(0) @db.Decimal(10, 2)  // what the agent earned for adding this blogger (admin-editable)
+  agentBonus     Decimal      @default(0) @db.Decimal(10, 2)  // what the agent earns for this blogger (admin-editable)
+  bonusCreditedAt DateTime?                                   // set when the bonus is credited: blogger has an approved account and enough approved videos
+  assignedLink   String?                                     // link given by the admin; the blogger must add it to his social media account
   lang           Lang         @default(EN)
   status         AccountState @default(ACTIVE)
   createdAt      DateTime     @default(now())
@@ -106,6 +108,7 @@ model SocialAccount {
   url       String
   status    Review   @default(PENDING)
   ref       String?                             // normalized username / channel id, used to check video ownership
+  rejectReason String?                          // why the admin rejected this account (shown to the blogger)
   createdAt DateTime @default(now())
   videos    Video[]
   @@unique([bloggerId, platform, url])

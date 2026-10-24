@@ -2,10 +2,12 @@ import { db } from "@/lib/db";
 import { pageSuper } from "@/lib/auth";
 import { getAgentBonus } from "@/lib/settings";
 import { ensurePlans } from "@/lib/plans";
+import { minVideos } from "@/lib/commission";
 import {
   createPlan,
   savePlan,
   setAgentBonusDefault,
+  setBonusRule,
   setRate,
 } from "../actions";
 import PlanBadge from "../PlanBadge";
@@ -17,10 +19,11 @@ export default async function Rates({
   searchParams: { msg?: string };
 }) {
   await pageSuper();
-  const [rates, bonus, plans] = await Promise.all([
+  const [rates, bonus, plans, need] = await Promise.all([
     db.rate.findMany({ orderBy: { platform: "asc" } }),
     getAgentBonus(),
     ensurePlans(),
+    minVideos(),
   ]);
   return (
     <>
@@ -117,6 +120,27 @@ export default async function Rates({
             className="inp w-28"
           />
           <button className="btn">Add plan</button>
+        </form>
+      </div>
+
+      <div className="card space-y-2">
+        <h2 className="font-medium">When is the agent bonus credited?</h2>
+        <p className="text-sm text-slate-500">
+          Not at registration. The bonus (₹150 / ₹200 ...) is added to the agent
+          only after the blogger has linked an <b>approved account</b> and has
+          at least this many <b>approved videos</b>.
+        </p>
+        <form action={setBonusRule} className="flex items-center gap-2">
+          <span className="text-sm">Approved videos needed</span>
+          <input
+            name="minVideos"
+            type="number"
+            min="1"
+            max="100"
+            defaultValue={need}
+            className="inp w-20"
+          />
+          <button className="btn">Save</button>
         </form>
       </div>
 

@@ -7,6 +7,7 @@ import { ownerHint, normalizeVideoUrl, parseAccount } from "./platforms";
 import { getVideoInfo } from "./providers";
 import { submissionOpen, weekStartIST } from "./week";
 import { randomToken } from "./security";
+import { creditEligible } from "./commission";
 
 export type ErrKey =
   | "e_badUrl"
@@ -24,7 +25,18 @@ export type ErrKey =
 type Err = { error: ErrKey };
 const num = (d: unknown) => Number(d ?? 0);
 
-/** /start is enough to register. An agent link (payload) additionally assigns the agent and credits the agent bonus. */
+/** Looks up an agent link (unused, agent active). */
+async function findLink(code?: string) {
+  if (!code || !/^[A-Za-z0-9_-]{6,40}$/.test(code)) return null;
+  const link = await db.referralLink.findUnique({
+    where: { code },
+    include: { agent: { include: { plan: true } } },
+  });
+  return link && !link.usedAt && link.agent.status === "ACTIVE" ? link : null;
+}
+
+/** /start is enough to register. The agent link assigns the agent automatically (also for a blogger who joined earlier without a link)
+ *  and sets the agent bonus from the agent's plan. Only 3 database round trips, so the bot answers fast. */
 export async function registerBlogger(
   tg: { id: number; first_name: string; username?: string },
   code?: string,
@@ -32,74 +44,91 @@ export async function registerBlogger(
   blogger: Blogger;
   created: boolean;
   status: "OK" | "ALREADY" | "BADLINK";
+  agentName?: string;
 }> {
   const tid = BigInt(tg.id);
-  const existing = await db.blogger.findUnique({ where: { telegramId: tid } });
-  if (existing)
-    return {
-      blogger: existing,
-      created: false,
-      status: code ? "ALREADY" : "OK",
-    };
+  const [existing, link] = await Promise.all([
+    db.blogger.findUnique({ where: { telegramId: tid } }),
+    findLink(code),
+  ]);
+  const bonusOf = async (l: NonNullable<typeof link>) =>
+    l.agent.plan ? Number(l.agent.plan.agentBonus) : await getAgentBonus();
+  const useLink = async (l: NonNullable<typeof link>) =>
+    (
+      await db.referralLink.updateMany({
+        where: { id: l.id, usedAt: null },
+        data: { usedAt: new Date() },
+      })
+    ).count === 1;
 
-  const link =
-    code && /^[A-Za-z0-9_-]{6,40}$/.test(code)
-      ? await db.referralLink.findUnique({
-          where: { code },
-          include: { agent: { include: { plan: true } } },
-        })
-      : null;
-  const valid = !!link && !link.usedAt && link.agent.status === "ACTIVE";
-  let assigned = false;
+  if (existing) {
+    if (!code) return { blogger: existing, created: false, status: "OK" };
+    if (existing.agentId)
+      return { blogger: existing, created: false, status: "ALREADY" }; // already has an agent
+    if (!link || !(await useLink(link)))
+      return { blogger: existing, created: false, status: "BADLINK" };
+    const blogger = await db.blogger.update({
+      where: { id: existing.id },
+      data: { agentId: link.agentId, agentBonus: await bonusOf(link) },
+    });
+    await creditEligible({ bloggerId: blogger.id });
+    return {
+      blogger,
+      created: false,
+      status: "OK",
+      agentName: link.agent.name,
+    };
+  }
+
+  let agentId: string | null = null,
+    bonus = 0,
+    agentName: string | undefined;
+  if (link && (await useLink(link))) {
+    agentId = link.agentId;
+    agentName = link.agent.name;
+    bonus = await bonusOf(link);
+  }
   try {
-    const blogger = await db.$transaction(async (tx) => {
-      let agentId: string | null = null,
-        bonus = 0;
-      if (valid) {
-        const u = await tx.referralLink.updateMany({
-          where: { id: link!.id, usedAt: null },
-          data: { usedAt: new Date() },
-        });
-        if (u.count === 1) {
-          agentId = link!.agentId;
-          bonus = link!.agent.plan
-            ? Number(link!.agent.plan.agentBonus)
-            : await getAgentBonus(tx);
-          assigned = true;
-        } // bonus comes from the agent's plan (D / S)
-      }
-      return tx.blogger.create({
-        data: {
-          telegramId: tid,
-          name: tg.first_name.slice(0, 60),
-          username: tg.username,
-          agentId,
-          agentBonus: bonus,
-        },
-      });
+    const blogger = await db.blogger.create({
+      data: {
+        telegramId: tid,
+        name: tg.first_name.slice(0, 60),
+        username: tg.username,
+        agentId,
+        agentBonus: bonus,
+      },
     });
     return {
       blogger,
       created: true,
-      status: code && !assigned ? "BADLINK" : "OK",
+      status: code && !agentId ? "BADLINK" : "OK",
+      agentName,
     };
   } catch {
-    const b = await db.blogger.findUnique({ where: { telegramId: tid } }); // parallel /start race
+    if (agentId && link)
+      await db.referralLink
+        .update({ where: { id: link.id }, data: { usedAt: null } })
+        .catch(() => {}); // parallel /start: give the link back
+    const b = await db.blogger.findUnique({ where: { telegramId: tid } });
     if (b) return { blogger: b, created: false, status: "OK" };
     throw new Error("register failed");
   }
 }
 
-export async function createReferral(agentId: string) {
+export async function createReferral(agentId: string, bonusKnown?: number) {
   const code = randomToken(9);
   await db.referralLink.create({ data: { code, agentId } });
-  const ag = await db.agent.findUnique({
-    where: { id: agentId },
-    include: { plan: true },
-  });
+  let bonus = bonusKnown; // the bot already knows the agent's plan: saves a database round trip
+  if (bonus === undefined) {
+    const ag = await db.agent.findUnique({
+      where: { id: agentId },
+      include: { plan: true },
+    });
+    bonus = ag?.plan ? Number(ag.plan.agentBonus) : await getAgentBonus();
+  }
   return {
     url: `https://t.me/${process.env.BLOGGER_BOT_USERNAME}?start=${code}`,
-    bonus: ag?.plan ? Number(ag.plan.agentBonus) : await getAgentBonus(),
+    bonus,
   };
 }
 
@@ -121,6 +150,17 @@ export async function addAccount(
       },
     });
     if (taken) return { error: "e_accountTaken" };
+  }
+  const existing = await db.socialAccount.findFirst({
+    where: { bloggerId, platform, url: a.url },
+  });
+  if (existing) {
+    if (existing.status !== "REJECTED") return { error: "e_dupAccount" };
+    await db.socialAccount.update({
+      where: { id: existing.id },
+      data: { status: "PENDING", rejectReason: null, ref: a.ref },
+    }); // applying again after a rejection
+    return { ok: true };
   }
   try {
     await db.socialAccount.create({
@@ -359,7 +399,9 @@ export async function bloggerData(id: string) {
       url: a.url,
       status: a.status,
       label: accLabel(a),
+      reason: a.rejectReason,
     })),
+    assignedLink: b.assignedLink ?? "",
     videos: videos.map((v) => ({
       id: v.id,
       platform: v.platform,
@@ -377,6 +419,7 @@ export async function bloggerData(id: string) {
 }
 
 export async function agentData(id: string) {
+  await creditEligible({ agentId: id });
   const a = await db.agent.findUniqueOrThrow({
     where: { id },
     include: { plan: true },
@@ -402,7 +445,11 @@ export async function agentData(id: string) {
     }),
     agentBalance(id),
     db.blogger.aggregate({
-      where: { agentId: id, status: { not: "DELETED" } },
+      where: {
+        agentId: id,
+        status: { not: "DELETED" },
+        bonusCreditedAt: { not: null },
+      },
       _sum: { agentBonus: true },
     }),
   ]);
@@ -420,7 +467,8 @@ export async function agentData(id: string) {
       name: b.name,
       status: b.status,
       videos: b._count.videos,
-      bonus: num(b.agentBonus),
+      credited: !!b.bonusCreditedAt,
+      bonus: b.bonusCreditedAt ? num(b.agentBonus) : 0,
     })),
     videos: videos.map((v) => ({
       id: v.id,

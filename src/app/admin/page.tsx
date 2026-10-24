@@ -80,13 +80,13 @@ export default async function Dashboard({
   // ---- Month-wise report (IST months, last 12) ----
   const msince = new Date(Date.now() - 400 * 86_400_000);
   type N = { m: string; n: number };
-  const [mAg, mBl, mVs, mRv, mVh, mWr, mPd] = await Promise.all([
+  const [mAg, mBl, mVs, mRv, mVh, mWr, mPd, mCm] = await Promise.all([
     db.$queryRaw<
       N[]
     >`SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COUNT(*)::int AS n FROM "Agent" WHERE "createdAt" >= ${msince} GROUP BY 1`,
     db.$queryRaw<
-      { m: string; n: number; amt: number }[]
-    >`SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COUNT(*)::int AS n, COALESCE(SUM("agentBonus"),0)::float8 AS amt FROM "Blogger" WHERE "createdAt" >= ${msince} AND "status" <> 'DELETED' GROUP BY 1`,
+      N[]
+    >`SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COUNT(*)::int AS n FROM "Blogger" WHERE "createdAt" >= ${msince} AND "status" <> 'DELETED' GROUP BY 1`,
     db.$queryRaw<
       N[]
     >`SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COUNT(*)::int AS n FROM "Video" WHERE "createdAt" >= ${msince} GROUP BY 1`,
@@ -102,6 +102,9 @@ export default async function Dashboard({
     db.$queryRaw<
       { m: string; amt: number }[]
     >`SELECT to_char(("updatedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COALESCE(SUM("amount"),0)::float8 AS amt FROM "Withdrawal" WHERE "updatedAt" >= ${msince} AND "status" = 'PAID' GROUP BY 1`,
+    db.$queryRaw<
+      { m: string; amt: number }[]
+    >`SELECT to_char(("bonusCreditedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COALESCE(SUM("agentBonus"),0)::float8 AS amt FROM "Blogger" WHERE "bonusCreditedAt" >= ${msince} AND "status" <> 'DELETED' GROUP BY 1`,
   ]);
   const nowIST = new Date(Date.now() + 5.5 * 3600_000);
   const months = Array.from({ length: 12 }, (_, i) => {
@@ -155,11 +158,14 @@ export default async function Dashboard({
       gte: new Date(Date.UTC(y, mo - 1, 1) - IST),
       lt: new Date(Date.UTC(y, mo, 1) - IST),
     };
-    const [nA, nB, sub, pend, apr, rej, op, paid, vh] = await Promise.all([
+    const [nA, nB, cm, sub, pend, apr, rej, op, paid, vh] = await Promise.all([
       db.agent.count({ where: { createdAt: inM } }),
       db.blogger.aggregate({
         where: { createdAt: inM, status: { not: "DELETED" } },
         _count: { _all: true },
+      }),
+      db.blogger.aggregate({
+        where: { bonusCreditedAt: inM, status: { not: "DELETED" } },
         _sum: { agentBonus: true },
       }),
       db.video.count({ where: { createdAt: inM } }),
@@ -192,7 +198,7 @@ export default async function Dashboard({
       ["Videos submitted", sub],
       ["Rejected videos", rej],
       ["Payments paid ₹", Number(paid._sum.amount ?? 0).toFixed(2)],
-      ["Agent commission ₹", Number(nB._sum.agentBonus ?? 0).toFixed(2)],
+      ["Agent commission ₹", Number(cm._sum.agentBonus ?? 0).toFixed(2)],
     ];
   }
   const tab = (active: boolean) =>
@@ -316,7 +322,7 @@ export default async function Dashboard({
                 <td>{label}</td>
                 <td>{g(mAg, key)?.n ?? 0}</td>
                 <td>{g(mBl, key)?.n ?? 0}</td>
-                <td>{inr(g(mBl, key)?.amt)}</td>
+                <td>{inr(g(mCm, key)?.amt)}</td>
                 <td>{g(mVs, key)?.n ?? 0}</td>
                 <td>{g(mRv, key)?.a ?? 0}</td>
                 <td>{g(mRv, key)?.r ?? 0}</td>
@@ -329,10 +335,10 @@ export default async function Dashboard({
           </tbody>
         </table>
         <p className="text-xs text-slate-500">
-          Agent commission = bonus credited for bloggers who joined that month.
-          Views added and blogger earnings count what was saved that month
-          (adjusted views, corrections included). Payments paid = marked
-          Complete that month.
+          Agent commission = bonus credited that month (blogger had an approved
+          account and approved videos). Views added and blogger earnings count
+          what was saved that month (adjusted views, corrections included).
+          Payments paid = marked Complete that month.
         </p>
       </div> */}
       <div className="flex gap-3 text-sm">

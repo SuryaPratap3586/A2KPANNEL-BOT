@@ -6,19 +6,30 @@ export const dynamic = "force-dynamic";
 
 function Review({ id, status }: { id: string; status: string }) {
   return (
-    <span className="flex gap-1">
-      {(["APPROVED", "REJECTED"] as const)
-        .filter((d) => d !== status)
-        .map((d) => (
-          <form key={d} action={reviewAccount}>
-            <input type="hidden" name="id" value={id} />
-            <input type="hidden" name="decision" value={d} />
-            <button className={d === "APPROVED" ? "btn-g" : "btn-r"}>
-              {d === "APPROVED" ? "Approve" : "Reject"}
-            </button>
-          </form>
-        ))}
-    </span>
+    <div className="space-y-1">
+      {status !== "APPROVED" && (
+        <form action={reviewAccount}>
+          <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="decision" value="APPROVED" />
+          <button className="btn-g">Approve</button>
+        </form>
+      )}
+      {status !== "REJECTED" && (
+        <form action={reviewAccount} className="flex gap-1">
+          <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="decision" value="REJECTED" />
+          <input
+            name="reason"
+            list="acc-reasons"
+            required
+            minLength={2}
+            placeholder="Reason (pick or write)"
+            className="inp w-44"
+          />
+          <button className="btn-r">Reject</button>
+        </form>
+      )}
+    </div>
   );
 }
 const tone = (s: string) =>
@@ -50,6 +61,17 @@ export default async function Accounts() {
   return (
     <>
       <h1 className="text-xl font-semibold">Social accounts</h1>
+      <datalist id="acc-reasons">
+        {[
+          "Account is private",
+          "Link is wrong",
+          "Account is not yours",
+          "Fake or inactive account",
+          "Required link missing in bio",
+        ].map((r) => (
+          <option key={r} value={r} />
+        ))}
+      </datalist>
       <div className="card">
         <h2 className="font-medium">
           New accounts waiting for approval ({pending.length})
@@ -160,7 +182,14 @@ export default async function Accounts() {
                                   {a.url}
                                 </a>
                               </td>
-                              <td className={tone(a.status)}>{a.status}</td>
+                              <td className={tone(a.status)}>
+                                {a.status}
+                                {a.status === "REJECTED" && a.rejectReason ? (
+                                  <div className="text-xs">
+                                    {a.rejectReason}
+                                  </div>
+                                ) : null}
+                              </td>
                               <td>{a.createdAt.toISOString().slice(0, 10)}</td>
                               <td>
                                 <Review id={a.id} status={a.status} />

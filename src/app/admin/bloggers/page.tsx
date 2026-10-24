@@ -1,7 +1,12 @@
 import { db } from "@/lib/db";
 import { pageSuper } from "@/lib/auth";
 import { bloggerBalance } from "@/lib/balance";
-import { assignAgent, setBloggerBonus, setBloggerStatus } from "../actions";
+import {
+  assignAgent,
+  setBloggerBonus,
+  setBloggerLink,
+  setBloggerStatus,
+} from "../actions";
 import AdjustForm from "../AdjustForm";
 import PlanBadge from "../PlanBadge";
 export const dynamic = "force-dynamic";
@@ -49,12 +54,13 @@ export default async function Bloggers() {
           <thead>
             <tr>
               <th>Blogger</th>
-              <th>Agent</th>
+              <th>Agent (change with the dropdown, then Set)</th>
               <th>Videos (approved / all)</th>
               <th>Live views</th>
               <th>Payable views</th>
               <th>Earned from views ₹</th>
-              <th>Agent bonus ₹</th>
+              <th>Agent bonus ₹ (credited when account + videos approved)</th>
+              <th>Link to add in social media</th>
               <th>Balance ₹</th>
               <th>Adjust balance</th>
               <th>Status</th>
@@ -102,6 +108,20 @@ export default async function Bloggers() {
                   <td>{fmt(a?._sum.views ?? 0)}</td>
                   <td>{Number(a?._sum.earnings ?? 0).toFixed(2)}</td>
                   <td>
+                    <div
+                      className={
+                        "text-xs " +
+                        (b.bonusCreditedAt
+                          ? "text-green-700"
+                          : "text-amber-700")
+                      }
+                    >
+                      {!b.agentId
+                        ? "no agent"
+                        : b.bonusCreditedAt
+                          ? "credited"
+                          : "waiting"}
+                    </div>
                     <form action={setBloggerBonus} className="flex gap-1">
                       <input type="hidden" name="id" value={b.id} />
                       <input
@@ -111,6 +131,18 @@ export default async function Bloggers() {
                         min="0"
                         defaultValue={b.agentBonus.toString()}
                         className="inp w-20"
+                      />
+                      <button className="btn">Save</button>
+                    </form>
+                  </td>
+                  <td>
+                    <form action={setBloggerLink} className="flex gap-1">
+                      <input type="hidden" name="id" value={b.id} />
+                      <input
+                        name="link"
+                        defaultValue={b.assignedLink ?? ""}
+                        placeholder="https://..."
+                        className="inp w-48"
                       />
                       <button className="btn">Save</button>
                     </form>

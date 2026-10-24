@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { pageSuper } from "@/lib/auth";
 import { agentBalance } from "@/lib/balance";
 import { ensurePlans } from "@/lib/plans";
+import { creditEligible } from "@/lib/commission";
 import { setAgentStatus, setAgentTelegramId, setAgentPlan } from "../actions";
 import AgentForm from "./AgentForm";
 import AdjustForm from "../AdjustForm";
@@ -15,6 +16,7 @@ export default async function Agents({
 }) {
   await pageSuper();
   const plans = await ensurePlans();
+  await creditEligible(); // credit anyone who qualified in the meantime
   const agents = await db.agent.findMany({
     where: { status: { not: "DELETED" } },
     include: { plan: true, _count: { select: { bloggers: true } } },
@@ -25,8 +27,13 @@ export default async function Agents({
     Promise.all(agents.map((a) => agentBalance(a.id))),
     db.blogger.groupBy({
       by: ["agentId"],
-      where: { agentId: { not: null }, status: { not: "DELETED" } },
+      where: {
+        agentId: { not: null },
+        status: { not: "DELETED" },
+        bonusCreditedAt: { not: null },
+      },
       _sum: { agentBonus: true },
+      _count: { _all: true },
     }),
   ]);
   const planOpts = plans.map((p) => ({
@@ -96,7 +103,13 @@ export default async function Agents({
                     <button className="btn">Save</button>
                   </form>
                 </td>
-                <td>{a._count.bloggers}</td>
+                <td>
+                  {a._count.bloggers}{" "}
+                  <span className="text-xs text-slate-500">
+                    ({comm.find((c) => c.agentId === a.id)?._count._all ?? 0}{" "}
+                    credited)
+                  </span>
+                </td>
                 <td>
                   {Number(
                     comm.find((c) => c.agentId === a.id)?._sum.agentBonus ?? 0,
