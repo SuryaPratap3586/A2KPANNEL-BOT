@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { Platform } from "@prisma/client";
 import { db } from "@/lib/db";
 import { RateLimiter, verifyWebAppInitData } from "@/lib/security";
 import * as svc from "@/lib/services";
+import { BLOGGER_PLATFORMS } from "@/lib/platforms";
 
 const limiter = new RateLimiter(60, 60_000);
-const P = z.nativeEnum(Platform),
+const P = z.enum(BLOGGER_PLATFORMS), // bloggers: Instagram, YouTube, Moj, Facebook only
   url = z.string().trim().min(5).max(500);
 const Body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("me") }),
@@ -21,9 +21,9 @@ const Body = z.discriminatedUnion("action", [
   }),
   z.object({ action: z.literal("addAccount"), platform: P, url }),
   z.object({
-    action: z.literal("submitVideo"),
-    accountId: z.string().cuid().optional(),
-    platform: P.optional(),
+    action: z.literal("submitVideo"), // platform + username (@xyz) + video link are all required
+    platform: P,
+    username: z.string().trim().min(2).max(51),
     url,
   }),
   z.object({ action: z.literal("newLink") }),
@@ -94,11 +94,12 @@ export async function POST(req: Request) {
       break;
     case "submitVideo":
       if (who.bloggerId)
-        res = a.accountId
-          ? await svc.submitVideoForAccount(who.bloggerId, a.accountId, a.url)
-          : a.platform
-            ? await svc.submitVideo(who.bloggerId, a.platform, a.url)
-            : { error: "e_badUrl" };
+        res = await svc.submitVideoByUsername(
+          who.bloggerId,
+          a.platform,
+          a.username,
+          a.url,
+        );
       break;
     case "newLink":
       if (who.agentId) extra = { link: await svc.createReferral(who.agentId) };

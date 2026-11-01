@@ -3,7 +3,14 @@ import { Blogger, Platform, SocialAccount } from "@prisma/client";
 import { db } from "./db";
 import { agentBalance, bloggerBalance } from "./balance";
 import { MIN_WITHDRAW, getAgentBonus } from "./settings";
-import { ownerHint, normalizeVideoUrl, parseAccount } from "./platforms";
+import {
+  accountHasUsername,
+  cleanUsername,
+  isBloggerPlatform,
+  ownerHint,
+  normalizeVideoUrl,
+  parseAccount,
+} from "./platforms";
 import { getVideoInfo } from "./providers";
 import {
   submissionOpen,
@@ -27,7 +34,10 @@ export type ErrKey =
   | "e_failed"
   | "e_closed"
   | "e_notLinked"
-  | "e_cantVerify";
+  | "e_cantVerify"
+  | "e_platform"
+  | "e_needUser"
+  | "e_userNotLinked";
 type Err = { error: ErrKey };
 const num = (d: unknown) => Number(d ?? 0);
 
@@ -143,6 +153,7 @@ export async function addAccount(
   platform: Platform,
   raw: string,
 ): Promise<{ ok: true } | Err> {
+  if (!isBloggerPlatform(platform)) return { error: "e_platform" }; // Instagram, YouTube, Moj, Facebook only
   const a = parseAccount(platform, raw);
   if (!a) return { error: "e_badUrl" };
   if (a.ref) {
@@ -188,6 +199,7 @@ export async function submitVideo(
   only?: SocialAccount | null,
   via: "APP" | "BOT" = "APP",
 ): Promise<{ ok: true; unverified: boolean } | Err> {
+  if (!isBloggerPlatform(platform)) return { error: "e_platform" }; // Instagram, YouTube, Moj, Facebook only
   if (!submissionOpen()) return { error: "e_closed" };
   const url = normalizeVideoUrl(platform, raw);
   if (!url) return { error: "e_badUrl" };
@@ -200,7 +212,8 @@ export async function submitVideo(
 
   let accountId: string | null = null,
     verified = false;
-  if (platform !== "OTHER") {
+  {
+    // every blogger platform has accounts (Other is no longer accepted)
     const accounts = only
       ? [only]
       : await db.socialAccount.findMany({
@@ -244,7 +257,7 @@ export async function submitVideo(
         submittedVia: via,
       },
     });
-    return { ok: true, unverified: !verified && platform !== "OTHER" };
+    return { ok: true, unverified: !verified };
   } catch (e: any) {
     if (e?.code === "P2002") {
       // same link submitted at the same moment
@@ -256,6 +269,31 @@ export async function submitVideo(
     }
     return { error: "e_failed" };
   }
+}
+
+/** Every submission (app and bot) needs the video link AND the username it was posted from (e.g. YouTube @xyz, Instagram @abc).
+ *  The username must be one of the blogger's approved accounts on that platform, and a link that names its owner must name the same user.
+ *  Then the usual checks run for THAT account (Mon-Fri, duplicates, owner check through the APIs). */
+export async function submitVideoByUsername(
+  bloggerId: string,
+  platform: Platform,
+  username: string,
+  raw: string,
+  via: "APP" | "BOT" = "APP",
+): Promise<{ ok: true; unverified: boolean } | Err> {
+  if (!isBloggerPlatform(platform)) return { error: "e_platform" };
+  const user = cleanUsername(username);
+  if (!user) return { error: "e_needUser" };
+  if (!normalizeVideoUrl(platform, raw)) return { error: "e_badUrl" };
+  const accounts = await db.socialAccount.findMany({
+    where: { bloggerId, platform, status: "APPROVED" },
+  });
+  if (!accounts.length) return { error: "e_needAccount" };
+  const acc = accounts.find((a) => accountHasUsername(a, user));
+  if (!acc) return { error: "e_userNotLinked" };
+  const hint = ownerHint(platform, raw); // instagram.com/<user>/reel/..., mojapp.in/@<user>/video/...
+  if (hint && hint !== user) return { error: "e_notLinked" };
+  return submitVideo(bloggerId, platform, raw, acc, via);
 }
 
 /** Blogger picked one of his approved accounts (platform + username) and pasted the link: the video must belong to THAT account. */
@@ -442,6 +480,7 @@ export async function bloggerData(id: string) {
       platform: a.platform,
       url: a.url,
       status: a.status,
+      ref: a.ref, // used by the app to check the typed username
       label: accLabel(a),
       reason: a.rejectReason,
     })),
