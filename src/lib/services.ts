@@ -524,9 +524,13 @@ export async function agentData(id: string) {
       reason: v.rejectReason,
       blogger: v.blogger.name,
       ...timeline(v, now),
-      // Only videos whose 168 hours are complete have final (eligible) views and payment
-      eligibleViews: trackState(v, now) === "COMPLETED" ? v.views : null,
-      payment: trackState(v, now) === "COMPLETED" ? num(v.earnings) : null,
+      // Final (eligible) views and payment exist only after the 168 hours AND after the admin entered the payable views
+      eligibleViews:
+        trackState(v, now) === "COMPLETED" && v.viewsEdited ? v.views : null,
+      payment:
+        trackState(v, now) === "COMPLETED" && v.viewsEdited
+          ? num(v.earnings)
+          : null,
     })),
     payments: pays.map(payRow),
   };

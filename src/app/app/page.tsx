@@ -334,7 +334,9 @@ export default function MiniApp() {
                     </div>
                     {v.status === "APPROVED" && !isB && (
                       <div style={{ fontSize: 13, marginTop: 4 }}>
-                        {v.state === "COMPLETED" ? (
+                        {v.state === "COMPLETED" && v.eligibleViews === null ? (
+                          t("waitingAdmin")
+                        ) : v.state === "COMPLETED" ? (
                           <>
                             {t("eligibleViews")}:{" "}
                             <b>{num(v.eligibleViews ?? 0)}</b> · {t("payment")}

@@ -9,7 +9,6 @@ import {
   setViews,
   fetchOneAction,
   fetchAllAction,
-  resetToLiveAction,
 } from "../actions";
 export const dynamic = "force-dynamic";
 
@@ -202,19 +201,21 @@ export default async function Videos({
             Run due fetches now (starting + final views)
           </Btn>{" "}
           <span className="text-xs text-slate-500">
-            Views are fetched twice: at approval (starting views) and once the
-            168 hours are over (final views). Gained views = final - starting;
-            earnings are calculated on them and count in the balance from then
-            on. The hourly cron does this automatically. "Fetch" on a row only
-            shows the current live views, it does not change money.
+            Actual views are fetched twice: at approval (starting views) and once
+            the 168 hours are over (final views); the hourly cron does this
+            automatically. Fetched views never create a payment: after the 168
+            hours you enter the payable views on the Completed tab, and the
+            payment is calculated only from them.
           </span>
         </form>
       )}
       {tab === "COMPLETED" && (
         <p className="text-xs text-slate-500">
-          These videos finished their 168 hours. Gained views (final - starting)
-          and earnings are calculated at the final fetch and counted in the
-          blogger's balance. You can still correct the views manually.
+          These videos finished their 168 hours. Check the actual views (final -
+          starting = gained), then enter the payable views and press Save: the
+          payment is calculated only from the payable views you enter and goes
+          into the blogger's balance. You can change them again later; only the
+          difference is added or removed.
         </p>
       )}
       {tab === "PENDING" && (
@@ -242,19 +243,19 @@ export default async function Videos({
                 {approvedTab && (
                   <>
                     <th>7-day window</th>
-                    <th>Views now (fetched) and gained since approval</th>
+                    <th>Actual views (fetched)</th>
                     <th>Likes</th>
                     <th>Comments</th>
                     <th>
                       {tab === "TRACKING"
-                        ? "Adjusted views (not final until the 168 h end)"
-                        : "Eligible views (final, paid on)"}
+                        ? "Payable views (entered after the 168 h)"
+                        : "Payable views (entered by admin, paid on)"}
                     </th>
                     {me.role === "SUPER" && (
                       <th>
                         {tab === "TRACKING"
-                          ? "Earned so far ₹ (not in balance yet)"
-                          : "Payment ₹ (final, in balance)"}
+                          ? "Payment ₹ (after the 168 h)"
+                          : "Payment ₹ (from payable views)"}
                       </th>
                     )}
                     <th>Update</th>
@@ -341,27 +342,31 @@ export default async function Videos({
                       <td>{fmt(v.likes)}</td>
                       <td>{fmt(v.comments)}</td>
                       <td>
-                        <b>{fmt(v.views)}</b>
-                        {tab === "TRACKING" && !v.viewsEdited && (
+                        {tab === "TRACKING" ? (
                           <div className="text-xs text-slate-500">
-                            calculated at the final fetch
+                            enter after {istDateTime(v.trackEndsAt)}
+                          </div>
+                        ) : v.viewsEdited ? (
+                          <>
+                            <b>{fmt(v.views)}</b>
+                            <div className="text-xs text-green-700">
+                              entered by admin
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-xs text-amber-700">
+                            not entered yet: no payment
                           </div>
                         )}
-                        {tab === "COMPLETED" &&
-                          !v.viewsEdited &&
-                          (v.baseViews === null || !v.frozen) && (
-                            <div className="text-xs text-amber-700">
-                              {v.baseViews === null
-                                ? "starting views missing: enter the views manually"
-                                : "waiting for the final fetch (next hourly run)"}
-                            </div>
-                          )}
-                        {v.viewsEdited && (
+                        {tab === "COMPLETED" && !v.frozen && (
+                          <div className="text-xs text-slate-500">
+                            final fetch pending (next hourly run)
+                          </div>
+                        )}
+                        {tab === "COMPLETED" && v.baseViews === null && (
                           <div className="text-xs text-amber-700">
-                            edited
-                            {v.views !== v.liveViews
-                              ? ` (live ${fmt(v.liveViews)})`
-                              : ""}
+                            starting views were not fetched: check the views on
+                            the video itself
                           </div>
                         )}
                         {v.frozen && (
@@ -377,27 +382,32 @@ export default async function Videos({
                             <input type="hidden" name="id" value={v.id} />
                             <Btn className="btn">Fetch</Btn>
                           </form>
-                          {v.viewsEdited && (
-                            <form action={resetToLiveAction}>
-                              <input type="hidden" name="id" value={v.id} />
-                              <Btn className="btn">Use live</Btn>
-                            </form>
-                          )}
                         </div>
+                        {tab === "TRACKING" ? (
+                          <p className="text-xs text-slate-500">
+                            Payable views can be entered once the 168 hours are
+                            complete.
+                          </p>
+                        ) : (
                         <form action={setViews} className="space-y-1">
                           <input type="hidden" name="id" value={v.id} />
                           <label className="block text-xs text-slate-500">
-                            Adjusted views (paid on)
+                            Payable views (payment is calculated from this)
                             <input
                               name="views"
                               type="number"
                               min={0}
-                              defaultValue={
-                                v.viewsEdited || v.views ? v.views : gained(v)
-                              }
+                              required
+                              defaultValue={v.viewsEdited ? v.views : gained(v)}
                               className="inp w-full"
                             />
                           </label>
+                          {!v.viewsEdited && (
+                            <p className="text-xs text-slate-500">
+                              Filled with the fetched gained views. Nothing is
+                              paid until you press Save.
+                            </p>
+                          )}
                           <label className="block text-xs text-slate-500">
                             Likes
                             <input
@@ -420,6 +430,7 @@ export default async function Videos({
                           </label>
                           <Btn className="btn">Save</Btn>
                         </form>
+                        )}
                         <details>
                           <summary className="text-xs underline cursor-pointer">
                             7-day history

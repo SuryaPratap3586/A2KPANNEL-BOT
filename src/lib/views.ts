@@ -17,7 +17,13 @@ export async function applyViews(
       where: { id: videoId },
       include: { blogger: { include: { agent: { include: { plan: true } } } } },
     });
-    if (!v || v.status !== "APPROVED" || newViews === v.views) return;
+    if (!v || v.status !== "APPROVED") return;
+    if (newViews === v.views) {
+      // same number typed (e.g. 0 = pay nothing): no money changes, but it now counts as entered by the admin
+      if (source === "MANUAL" && !keepEdited && !v.viewsEdited)
+        await tx.video.update({ where: { id: v.id }, data: { viewsEdited: true } });
+      return;
+    }
     if (source !== "MANUAL" && newViews < v.views) return;
     const platformRate = Number(
       (await tx.rate.findUnique({ where: { platform: v.platform } }))
@@ -95,11 +101,10 @@ export type FetchResult =
   | "nodata"
   | "notapproved";
 
-/** One fetch of an approved video.
- *  - Before the 168 hours end: saves the live numbers; the first successful fetch is the STARTING views (baseViews). No money is calculated.
- *  - After the 168 hours end (final fetch): gained views = final views - starting views; earnings are calculated on them and the video is frozen.
- *    If the admin already typed the views, the typed number is kept. Afterwards the admin can still correct the views manually.
- *  Set PAY_ONLY_ADJUSTED="true" to never calculate earnings automatically (admin types every number). */
+/** One fetch of an approved video. Fetched numbers are ACTUAL views only: they never create earnings.
+ *  - Before the 168 hours end: saves the live numbers; the first successful fetch is the STARTING views (baseViews).
+ *  - After the 168 hours end (final fetch): saves the final live views (gained = final - starting is shown to the admin) and freezes the video.
+ *  Money: the admin enters the payable views after the 168 hours (setViews); earnings are calculated only from those. */
 export async function refreshVideo(
   videoId: string,
   source: "AUTO" | "FETCH",
@@ -125,17 +130,8 @@ export async function refreshVideo(
       ...(final ? { frozen: true } : {}),
     },
   });
-  let r: FetchResult = "ok";
-  if (final) {
-    if (v.baseViews === null) r = "nobase";
-    else {
-      if (!v.viewsEdited && process.env.PAY_ONLY_ADJUSTED !== "true")
-        await applyViews(videoId, Math.max(0, info.views - v.baseViews), source, actorId); // views gained in the 168 hours
-      r = "final";
-    }
-  }
   await recordStat(videoId);
-  return r;
+  return !final ? "ok" : v.baseViews === null ? "nobase" : "final";
 }
 
 const HOUR = 3600_000;
