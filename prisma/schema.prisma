@@ -135,8 +135,11 @@ model Video {
   account      SocialAccount? @relation(fields: [accountId], references: [id])
   ownerVerified Boolean @default(false)       // video was matched to one of the blogger's linked accounts
   weekStart    DateTime @default(now())       // Monday 00:00 IST of the submission week
+  trackEndsAt  DateTime @default(now())       // end of THIS video's own 7-day window (day 1 = day of submission). Views and earnings count in the balance only after it. Old videos = finished
   frozen       Boolean  @default(false)       // 7-day tracking finished (Saturday 23:59 IST)
   lastFetchedAt DateTime?
+  baseViews    Int?                           // live views when the 7 days started (first fetch after approval): only views gained AFTER it are counted
+  baseAt       DateTime?
   earnings     Decimal  @default(0) @db.Decimal(14, 2)
   createdAt    DateTime @default(now())
   history      ViewHistory[]
@@ -144,6 +147,7 @@ model Video {
   reposts      Repost[]
   @@index([bloggerId, status])
   @@index([status, frozen])
+  @@index([status, trackEndsAt])
 }
 
 model ViewHistory {

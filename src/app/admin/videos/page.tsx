@@ -1,5 +1,7 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { pageStaff } from "@/lib/auth";
+import { trackDay } from "@/lib/week";
 import PlanBadge from "../PlanBadge";
 import {
   reviewVideo,
@@ -9,7 +11,23 @@ import {
   resetToLiveAction,
 } from "../actions";
 export const dynamic = "force-dynamic";
-const TABS = ["PENDING", "APPROVED", "REJECTED", "REPOSTS"] as const;
+
+// Every approved video has its OWN 7 days (day 1 = the day the admin APPROVED it). While they run, the video is in "Tracking";
+// when the 7 days are over it moves to "Completed", and only then its earnings count in the blogger's balance.
+const TABS = [
+  "PENDING",
+  "TRACKING",
+  "COMPLETED",
+  "REJECTED",
+  "REPOSTS",
+] as const;
+const LABEL: Record<(typeof TABS)[number], string> = {
+  PENDING: "Pending",
+  TRACKING: "Tracking (7 days running)",
+  COMPLETED: "Completed (7 days done)",
+  REJECTED: "Rejected",
+  REPOSTS: "Reposts",
+};
 const REASONS = [
   "Wrong Logo",
   "Bad Quality",
@@ -22,6 +40,19 @@ const REASONS = [
   "Account not linked",
 ];
 const fmt = (n: number) => n.toLocaleString("en-IN");
+const istDate = (d: Date) =>
+  new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
+const istTime = (d: Date) =>
+  d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+const gained = (v: { liveViews: number; baseViews: number | null }) =>
+  Math.max(0, v.liveViews - (v.baseViews ?? v.liveViews)); // views gained since approval
 
 // Visible to every admin: all bloggers' videos, approve/reject with reason, fetch views (auto) or type views (manual).
 export default async function Videos({
@@ -30,18 +61,39 @@ export default async function Videos({
   searchParams: { status?: string; msg?: string };
 }) {
   const me = await pageStaff();
-  const tab = (TABS as readonly string[]).includes(searchParams.status ?? "")
-    ? (searchParams.status as (typeof TABS)[number])
+  const asked =
+    searchParams.status === "APPROVED" ? "TRACKING" : searchParams.status; // old links
+  const tab = (TABS as readonly string[]).includes(asked ?? "")
+    ? (asked as (typeof TABS)[number])
     : "PENDING";
+  const now = new Date();
   const isVideoTab = tab !== "REPOSTS";
+  const approvedTab = tab === "TRACKING" || tab === "COMPLETED";
+  const where: Prisma.VideoWhereInput =
+    tab === "PENDING"
+      ? { status: "PENDING" }
+      : tab === "REJECTED"
+        ? { status: "REJECTED" }
+        : tab === "TRACKING"
+          ? { status: "APPROVED", trackEndsAt: { gt: now } }
+          : { status: "APPROVED", trackEndsAt: { lte: now } };
+  const orderBy: Prisma.VideoOrderByWithRelationInput =
+    tab === "PENDING"
+      ? { createdAt: "asc" }
+      : tab === "TRACKING"
+        ? { trackEndsAt: "asc" }
+        : tab === "COMPLETED"
+          ? { trackEndsAt: "desc" }
+          : { createdAt: "desc" };
+
   const list = isVideoTab
     ? await db.video.findMany({
-        where: { status: tab as "PENDING" },
+        where,
         include: {
           blogger: { include: { agent: { include: { plan: true } } } },
           reviewedBy: true,
         },
-        orderBy: { createdAt: tab === "PENDING" ? "asc" : "desc" },
+        orderBy,
         take: 150,
       })
     : [];
@@ -52,18 +104,29 @@ export default async function Videos({
         take: 150,
       })
     : [];
-  const [counts, repostCount] = await Promise.all([
+  const [counts, repostCount, nTrack, nDone] = await Promise.all([
     db.video.groupBy({ by: ["status"], _count: { _all: true } }),
     db.repost.count(),
+    db.video.count({ where: { status: "APPROVED", trackEndsAt: { gt: now } } }),
+    db.video.count({
+      where: { status: "APPROVED", trackEndsAt: { lte: now } },
+    }),
   ]);
   const stats =
-    tab === "APPROVED" && list.length
+    approvedTab && list.length
       ? await db.videoStat.findMany({
           where: { videoId: { in: list.map((v) => v.id) } },
           orderBy: { day: "asc" },
         })
       : [];
-  const n = (s: string) => counts.find((c) => c.status === s)?._count._all ?? 0;
+  const n = (t: (typeof TABS)[number]) =>
+    t === "REPOSTS"
+      ? repostCount
+      : t === "TRACKING"
+        ? nTrack
+        : t === "COMPLETED"
+          ? nDone
+          : (counts.find((c) => c.status === t)?._count._all ?? 0);
   const open = (u: string) => (
     <a
       className="underline"
@@ -87,26 +150,40 @@ export default async function Videos({
     <>
       <h1 className="text-xl font-semibold">Videos</h1>
       {searchParams.msg && <p className="card text-sm">{searchParams.msg}</p>}
-      <div className="flex gap-4 text-sm">
+      <div className="flex flex-wrap gap-4 text-sm">
         {TABS.map((t) => (
           <a
             key={t}
             href={`?status=${t}`}
             className={"underline " + (t === tab ? "font-bold" : "")}
           >
-            {t[0] + t.slice(1).toLowerCase()} (
-            {t === "REPOSTS" ? repostCount : n(t)})
+            {LABEL[t]} ({n(t)})
           </a>
         ))}
       </div>
-      {tab === "APPROVED" && (
+      {tab === "TRACKING" && (
         <form action={fetchAllAction}>
-          <button className="btn">Fetch views for all (auto)</button>{" "}
+          <button className="btn">
+            Fetch views for all running videos (auto)
+          </button>{" "}
           <span className="text-xs text-slate-500">
-            Tracking runs Mon to Saturday 11:59 PM of the submission week.
-            Payable views = what the blogger sees and is paid on.
+            The 7 days of a video start on the day you approved it. Its earnings
+            are added to the blogger's balance only after the 7 days are
+            complete.
           </span>
         </form>
+      )}
+      {tab === "COMPLETED" && (
+        <p className="text-xs text-slate-500">
+          These videos finished their 7 days. Their earnings are counted in the
+          blogger's balance (payment).
+        </p>
+      )}
+      {tab === "PENDING" && (
+        <p className="text-xs text-slate-500">
+          The 7 days of a video start on the day you approve it. The submitted
+          time is shown under each video.
+        </p>
       )}
       <datalist id="reasons">
         {REASONS.map((r) => (
@@ -124,13 +201,20 @@ export default async function Videos({
                 <th>Video</th>
                 {tab === "PENDING" && <th>Moderate</th>}
                 {tab !== "PENDING" && <th>Reviewed by</th>}
-                {tab === "APPROVED" && (
+                {approvedTab && (
                   <>
-                    <th>Actual views (fetched)</th>
+                    <th>7-day window</th>
+                    <th>Views now (fetched) and gained since approval</th>
                     <th>Likes</th>
                     <th>Comments</th>
                     <th>Adjusted views (paid on)</th>
-                    {me.role === "SUPER" && <th>Earned ₹</th>}
+                    {me.role === "SUPER" && (
+                      <th>
+                        {tab === "TRACKING"
+                          ? "Earned so far ₹ (not paid yet)"
+                          : "Earned ₹ (counted)"}
+                      </th>
+                    )}
                     <th>Update</th>
                   </>
                 )}
@@ -153,6 +237,19 @@ export default async function Videos({
                     <div className="text-xs text-slate-500">
                       {v.url.slice(0, 44)}
                     </div>
+                    <div className="text-xs text-slate-500">
+                      submitted {istTime(v.createdAt)}
+                    </div>
+                    {v.status === "APPROVED" && v.reviewedAt && (
+                      <div className="text-xs text-slate-500">
+                        approved {istTime(v.reviewedAt)}
+                      </div>
+                    )}
+                    {v.status === "REJECTED" && v.reviewedAt && (
+                      <div className="text-xs text-slate-500">
+                        rejected {istTime(v.reviewedAt)}
+                      </div>
+                    )}
                     {owner(v)}
                   </td>
                   {tab === "PENDING" && (
@@ -178,9 +275,38 @@ export default async function Videos({
                     </td>
                   )}
                   {tab !== "PENDING" && <td>{v.reviewedBy?.name ?? "—"}</td>}
-                  {tab === "APPROVED" && (
+                  {approvedTab && (
                     <>
-                      <td>{fmt(v.liveViews)}</td>
+                      <td>
+                        {tab === "TRACKING" ? (
+                          <>
+                            <b>Day {trackDay(v.trackEndsAt, now)} of 7</b>
+                            <div className="text-xs text-slate-500">
+                              from {istDate(v.reviewedAt ?? v.createdAt)} to{" "}
+                              {istDate(v.trackEndsAt)}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <b className="text-green-700">7 days completed ✓</b>
+                            <div className="text-xs text-slate-500">
+                              on {istDate(v.trackEndsAt)}
+                            </div>
+                          </>
+                        )}
+                      </td>
+                      <td>
+                        <b>{fmt(v.liveViews)}</b>
+                        <div className="text-xs text-slate-500">
+                          at approval:{" "}
+                          {v.baseViews === null
+                            ? "not fetched yet"
+                            : fmt(v.baseViews)}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          gained in the 7 days: <b>{fmt(gained(v))}</b>
+                        </div>
+                      </td>
                       <td>{fmt(v.likes)}</td>
                       <td>{fmt(v.comments)}</td>
                       <td>
@@ -203,7 +329,7 @@ export default async function Videos({
                         )}
                         {v.frozen && (
                           <div className="text-xs text-slate-500">
-                            tracking closed
+                            fetching closed
                           </div>
                         )}
                       </td>
@@ -230,7 +356,7 @@ export default async function Videos({
                               type="number"
                               min={0}
                               defaultValue={
-                                v.viewsEdited || v.views ? v.views : v.liveViews
+                                v.viewsEdited || v.views ? v.views : gained(v)
                               }
                               className="inp w-full"
                             />
@@ -266,6 +392,7 @@ export default async function Videos({
                               <tr>
                                 <th>Date</th>
                                 <th>Live</th>
+                                <th>Gained</th>
                                 <th>Payable</th>
                                 <th>Likes</th>
                                 <th>Comments</th>
@@ -278,6 +405,15 @@ export default async function Videos({
                                   <tr key={s.id}>
                                     <td>{s.day.toISOString().slice(0, 10)}</td>
                                     <td>{fmt(s.liveViews)}</td>
+                                    <td>
+                                      {fmt(
+                                        Math.max(
+                                          0,
+                                          s.liveViews -
+                                            (v.baseViews ?? s.liveViews),
+                                        ),
+                                      )}
+                                    </td>
                                     <td>{fmt(s.payViews)}</td>
                                     <td>{fmt(s.likes)}</td>
                                     <td>{fmt(s.comments)}</td>

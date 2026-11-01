@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { getVideoInfo } from "./providers";
-import { istDay, weekEnd } from "./week";
+import { istDay } from "./week";
 
 /** Adjusted (payable) views drive earnings: earned = (new - old views) / 1,000,000 x CURRENT Rs-per-million rate (rate snapshot kept per row).
  *  AUTO (cron) / FETCH (admin pressed fetch) never go down. MANUAL (admin typed) can also correct downwards and marks the video as "edited",
@@ -76,7 +76,13 @@ export async function resetToLive(videoId: string, actorId?: string) {
     where: { id: videoId },
     data: { viewsEdited: false },
   });
-  await applyViews(videoId, v.liveViews, "MANUAL", actorId, true);
+  await applyViews(
+    videoId,
+    Math.max(0, v.liveViews - (v.baseViews ?? v.liveViews)),
+    "MANUAL",
+    actorId,
+    true,
+  ); // views gained since approval
   await recordStat(videoId);
   return true;
 }
@@ -94,6 +100,8 @@ export async function refreshVideo(
   if (v.frozen) return "closed";
   const info = await getVideoInfo(v.platform, v.url).catch(() => null);
   if (!info || info.views === undefined) return "nodata";
+  // The first fetch after approval is the starting point: only the views that come AFTER it (inside the 7 days) are counted.
+  const base = v.baseViews ?? info.views;
   await db.video.update({
     where: { id: videoId },
     data: {
@@ -101,17 +109,20 @@ export async function refreshVideo(
       likes: info.likes ?? v.likes,
       comments: info.comments ?? v.comments,
       lastFetchedAt: new Date(),
+      ...(v.baseViews === null
+        ? { baseViews: info.views, baseAt: new Date() }
+        : {}),
     },
   });
   // Default: money is calculated ONLY on the views the admin adjusts and saves. Set PAY_ONLY_ADJUSTED="false" to let payable views follow the fetched views automatically.
   if (process.env.PAY_ONLY_ADJUSTED === "false" && !v.viewsEdited)
-    await applyViews(videoId, info.views, source, actorId);
+    await applyViews(videoId, Math.max(0, info.views - base), source, actorId);
   await recordStat(videoId);
   return "ok";
 }
 
 /** Run every night ~23:59 IST (also fine to run more often).
- *  - Each approved video is tracked until Saturday 23:59 IST of its submission week, then frozen.
+ *  - Each approved video is tracked for ITS OWN 7 days (day 1 = the day it was APPROVED, day 7 ends 23:59 IST), then frozen.
  *  - Last 15 minutes before that = final fetch. Videos approved after the week ended get one catch-up fetch.
  *  - Works inside a time budget so serverless hosts do not time out; call again to continue. */
 export async function fetchAll(actorId?: string, budgetMs = 45_000) {
@@ -120,7 +131,7 @@ export async function fetchAll(actorId?: string, budgetMs = 45_000) {
   const vids = await db.video.findMany({
     where: { status: "APPROVED", frozen: false },
     orderBy: { lastFetchedAt: { sort: "asc", nulls: "first" } },
-    select: { id: true, weekStart: true, lastFetchedAt: true },
+    select: { id: true, trackEndsAt: true, lastFetchedAt: true },
   });
   let tried = 0,
     updated = 0,
@@ -130,7 +141,7 @@ export async function fetchAll(actorId?: string, budgetMs = 45_000) {
       remaining++;
       continue;
     }
-    const end = weekEnd(v.weekStart),
+    const end = v.trackEndsAt,
       finalFrom = new Date(end.getTime() - 15 * 60_000);
     const inFinal = now >= finalFrom;
     if (inFinal && v.lastFetchedAt && v.lastFetchedAt >= finalFrom) {

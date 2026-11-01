@@ -178,8 +178,10 @@ export default function MiniApp() {
                   <Row k={t("totalViews")} v={num(d.views)} />
                   <Row k={t("pending")} v={d.counts.pending} />
                   <Row k={t("approved")} v={d.counts.approved} />
+                  <Row k={t("completedVideos")} v={d.counts.completed} />
                   <Row k={t("rejected")} v={d.counts.rejected} />
                   <Row k={t("yourAgent")} v={d.agent ?? t("noAgent")} />
+                  <p style={{ opacity: 0.7, fontSize: 12 }}>{t("viewsNote")}</p>
                   <p style={{ opacity: 0.7, fontSize: 12 }}>
                     {t("closedNote")}
                   </p>
@@ -273,6 +275,19 @@ export default function MiniApp() {
                     >
                       {v.url}
                     </div>
+                    {isB && (
+                      <div style={{ fontSize: 12, opacity: 0.7 }}>
+                        {t("submittedOn", { d: v.submittedAt })}
+                        {v.approvedAt
+                          ? " · " + t("approvedOn", { d: v.approvedAt })
+                          : ""}
+                      </div>
+                    )}
+                    {v.status === "APPROVED" && isB && (
+                      <div style={{ fontSize: 13, opacity: 0.8 }}>
+                        {v.done ? t("sevenDone") : t("dayOf", { d: v.day })}
+                      </div>
+                    )}
                     {v.status === "APPROVED" && !isB && (
                       <div style={{ fontSize: 13 }}>
                         {t("payViews")}: {num(v.views)}

@@ -86,6 +86,13 @@ const EN = {
   submitted: "Video submitted for review.",
   unverifiedNote:
     "Video submitted. The account could not be checked automatically, admin will verify it.",
+  completedVideos: "Completed (7 days)",
+  dayOf: "Day {d} of 7",
+  sevenDone: "7 days completed ✓",
+  viewsNote:
+    "A video is tracked for 7 days from the day it is approved. Its views and earnings are counted after the 7 days are complete.",
+  submittedOn: "Submitted {d}",
+  approvedOn: "Approved {d}",
   totalViews: "Total views (paid on)",
   actualViews: "Actual views (platform)",
   adjustedViews: "Adjusted views (paid on)",
@@ -98,7 +105,7 @@ const EN = {
   dayWise: "Day-wise (7 days)",
   date: "Date",
   closedNote:
-    "Submit Monday to Friday. Views are counted until Saturday 11:59 PM.",
+    "Submit Monday to Friday. Each video is tracked for 7 days from the day it is approved.",
   edited: "edited by admin",
   pasteLink: "Send a video link here to submit it, or open the app.",
   e_minAmt: "Amount is below the minimum.",
@@ -191,6 +198,13 @@ const HI: typeof EN = {
   submitted: "वीडियो रिव्यू के लिए सबमिट हो गया।",
   unverifiedNote:
     "वीडियो सबमिट हो गया। अकाउंट अपने-आप जांचा नहीं जा सका, एडमिन जांचेगा।",
+  completedVideos: "पूरे हुए (7 दिन)",
+  dayOf: "दिन {d} / 7",
+  sevenDone: "7 दिन पूरे ✓",
+  viewsNote:
+    "वीडियो अप्रूव होने के दिन से 7 दिन गिने जाते हैं। उसके व्यूज़ और कमाई 7 दिन पूरे होने के बाद गिनी जाती है।",
+  submittedOn: "सबमिट {d}",
+  approvedOn: "अप्रूव {d}",
   totalViews: "कुल व्यूज़ (इन पर पेमेंट)",
   actualViews: "असली व्यूज़ (प्लेटफॉर्म)",
   adjustedViews: "एडजस्टेड व्यूज़ (इन पर पेमेंट)",
@@ -203,7 +217,7 @@ const HI: typeof EN = {
   dayWise: "दिन-वार (7 दिन)",
   date: "तारीख",
   closedNote:
-    "सोमवार से शुक्रवार तक सबमिट करें। व्यूज़ शनिवार रात 11:59 तक गिने जाते हैं।",
+    "सोमवार से शुक्रवार तक सबमिट करें। हर वीडियो के 7 दिन अप्रूव होने के दिन से गिने जाते हैं।",
   edited: "एडमिन ने बदला",
   pasteLink: "वीडियो सबमिट करने के लिए लिंक यहां भेजें, या ऐप खोलें।",
   e_minAmt: "राशि न्यूनतम से कम है।",

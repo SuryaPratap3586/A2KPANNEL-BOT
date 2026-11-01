@@ -5,7 +5,7 @@ import { agentBalance, bloggerBalance } from "./balance";
 import { MIN_WITHDRAW, getAgentBonus } from "./settings";
 import { ownerHint, normalizeVideoUrl, parseAccount } from "./platforms";
 import { getVideoInfo } from "./providers";
-import { submissionOpen, weekStartIST } from "./week";
+import { submissionOpen, trackDay, trackEnd, weekStartIST } from "./week";
 import { randomToken } from "./security";
 import { creditEligible } from "./commission";
 
@@ -211,9 +211,15 @@ export async function submitVideo(
         const match = accounts.find(
           (a) => a.ref && owners.has(a.ref.toLowerCase()),
         );
-        if (!match) return { error: "e_notLinked" }; // video belongs to some other account
-        accountId = match.id;
-        verified = true;
+        if (match) {
+          accountId = match.id;
+          verified = true;
+        } else if (
+          platform === "FACEBOOK" &&
+          process.env.STRICT_FACEBOOK_OWNER !== "true"
+        )
+          accountId = accounts.length === 1 ? accounts[0].id : null; // Facebook page names, links and ids often differ: accepted as "not verified" for the admin to check
+        else return { error: "e_notLinked" }; // video belongs to some other account
       } else if (process.env.STRICT_OWNER_CHECK === "true")
         return { error: "e_cantVerify" };
     }
@@ -227,6 +233,7 @@ export async function submitVideo(
         accountId,
         ownerVerified: verified,
         weekStart: weekStartIST(),
+        trackEndsAt: trackEnd(),
       },
     });
     return { ok: true, unverified: !verified && platform !== "OTHER" };
@@ -320,6 +327,8 @@ export async function requestWithdrawal(
   }
 }
 
+const istDate = (d: Date) =>
+  new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
 const payRow = (w: any) => ({
   id: w.id,
   amount: num(w.amount),
@@ -344,7 +353,8 @@ export async function bloggerData(id: string) {
     where: { id },
     include: { agent: true },
   });
-  const [accounts, videos, pays, balance, agg, reposts, cnt] =
+  const now = new Date();
+  const [accounts, videos, pays, balance, agg, reposts, cnt, doneN] =
     await Promise.all([
       db.socialAccount.findMany({
         where: { bloggerId: id },
@@ -363,9 +373,9 @@ export async function bloggerData(id: string) {
       }),
       bloggerBalance(id),
       db.video.aggregate({
-        where: { bloggerId: id, status: "APPROVED" },
+        where: { bloggerId: id, status: "APPROVED", trackEndsAt: { lte: now } },
         _sum: { views: true },
-      }),
+      }), // total views = videos whose 7 days are complete
       db.repost.findMany({
         where: { bloggerId: id },
         orderBy: { createdAt: "desc" },
@@ -375,6 +385,9 @@ export async function bloggerData(id: string) {
         by: ["status"],
         where: { bloggerId: id },
         _count: { _all: true },
+      }),
+      db.video.count({
+        where: { bloggerId: id, status: "APPROVED", trackEndsAt: { lte: now } },
       }),
     ]);
   const c = (st: string) => cnt.find((x) => x.status === st)?._count._all ?? 0;
@@ -391,6 +404,7 @@ export async function bloggerData(id: string) {
     counts: {
       pending: c("PENDING"),
       approved: c("APPROVED"),
+      completed: doneN,
       rejected: c("REJECTED"),
     },
     accounts: accounts.map((a) => ({
@@ -408,6 +422,11 @@ export async function bloggerData(id: string) {
       url: v.url,
       status: v.status,
       reason: v.rejectReason,
+      day: trackDay(v.trackEndsAt, now),
+      done: v.trackEndsAt <= now,
+      submittedAt: istDate(v.createdAt),
+      approvedAt:
+        v.status === "APPROVED" && v.reviewedAt ? istDate(v.reviewedAt) : null,
     })),
     reposts: reposts.map((r) => ({
       id: r.id,
