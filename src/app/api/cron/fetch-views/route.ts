@@ -5,7 +5,7 @@ import { creditEligible } from "@/lib/commission";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Call every night at 23:59 IST (Asia/Kolkata) with header  Authorization: Bearer $CRON_SECRET
+// Call EVERY HOUR with header  Authorization: Bearer $CRON_SECRET  (each video ends exactly 168 h after its approval)
 export async function GET(req: Request) {
   const given = Buffer.from(req.headers.get("authorization") ?? "");
   const want = Buffer.from(`Bearer ${process.env.CRON_SECRET}`);

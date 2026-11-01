@@ -1,5 +1,6 @@
 "use client";
 import { useFormState } from "react-dom";
+import Btn from "@/app/admin/Btn";
 import { createAgent } from "../actions";
 
 type S = {
@@ -46,7 +47,7 @@ export default function AgentForm({ plans }: { plans: PlanOpt[] }) {
           placeholder="Telegram ID (optional)"
           className="inp"
         />
-        <button className="btn">Create agent + token</button>
+        <Btn className="btn">Create agent + token</Btn>
       </form>
       <p className="text-xs text-slate-500">
         The plan (D / S) decides the agent bonus per blogger and the blogger

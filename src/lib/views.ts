@@ -121,9 +121,9 @@ export async function refreshVideo(
   return "ok";
 }
 
-/** Run every night ~23:59 IST (also fine to run more often).
- *  - Each approved video is tracked for ITS OWN 7 days (day 1 = the day it was APPROVED, day 7 ends 23:59 IST), then frozen.
- *  - Last 15 minutes before that = final fetch. Videos approved after the week ended get one catch-up fetch.
+/** Run EVERY HOUR (each video ends at its own time, so a nightly run is not enough).
+ *  - Each approved video is tracked for ITS OWN 168 hours from the approval timestamp, then frozen.
+ *  - The last hour before the end = final fetch (an hourly cron always hits it). A missed end gets one catch-up fetch.
  *  - Works inside a time budget so serverless hosts do not time out; call again to continue. */
 export async function fetchAll(actorId?: string, budgetMs = 45_000) {
   const t0 = Date.now(),
@@ -142,7 +142,7 @@ export async function fetchAll(actorId?: string, budgetMs = 45_000) {
       continue;
     }
     const end = v.trackEndsAt,
-      finalFrom = new Date(end.getTime() - 15 * 60_000);
+      finalFrom = new Date(end.getTime() - 60 * 60_000);
     const inFinal = now >= finalFrom;
     if (inFinal && v.lastFetchedAt && v.lastFetchedAt >= finalFrom) {
       await db.video.update({ where: { id: v.id }, data: { frozen: true } });

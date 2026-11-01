@@ -1,7 +1,8 @@
 "use client";
 import Script from "next/script";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Lang, tr, Key, DICT } from "@/lib/i18n";
+import { istDateTime } from "@/lib/week";
 
 const PLATFORMS = [
   "INSTAGRAM",
@@ -22,6 +23,9 @@ const TONE: Record<string, string> = {
   PAID: "#2f855a",
   APPROVED: "#2f855a",
   REJECTED: "#c53030",
+  PENDING_APPROVAL: "#b7791f",
+  TRACKING: "#2b6cb0",
+  COMPLETED: "#2f855a",
 };
 
 // Telegram Mini App ("Open App"): everything for Agent and Blogger lives here.
@@ -31,10 +35,20 @@ export default function MiniApp() {
   const [msg, setMsg] = useState("");
   const [link, setLink] = useState("");
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false); // a request is running: buttons are disabled (no double taps) and "Loading…" is shown
+  const last = useRef(0); // time of the last fresh data: switching tabs within 30 s reuses it instead of asking the server again
   const lang: Lang = d?.lang ?? "EN";
   const t = (k: Key, v?: Record<string, string | number>) => tr(lang, k, v);
 
   async function call(body: Record<string, unknown>) {
+    setBusy(true);
+    try {
+      return await request(body);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function request(body: Record<string, unknown>) {
     const tg = (window as any).Telegram?.WebApp;
     const r = await fetch("/api/webapp", {
       method: "POST",
@@ -59,6 +73,7 @@ export default function MiniApp() {
       return false;
     }
     setD(j.data);
+    last.current = Date.now();
     if (j.link) setLink(j.link.url);
     return true;
   }
@@ -156,8 +171,12 @@ export default function MiniApp() {
         onReady={boot}
       />
       {err && <p style={{ color: "#c53030" }}>{err}</p>}
+      {!d && !err && <p style={{ opacity: 0.6 }}>⏳ {t("loading")}</p>}
       {d && (
-        <>
+        <fieldset
+          disabled={busy}
+          style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+        >
           <div style={{ ...box, background: "#14213d", color: "#fff" }}>
             <div style={{ opacity: 0.7, fontSize: 12 }}>
               {t(isB ? "role_blogger" : "role_agent")}
@@ -168,6 +187,7 @@ export default function MiniApp() {
             </div>
             <div style={{ opacity: 0.7, fontSize: 12 }}>{t("balance")}</div>
           </div>
+          {busy && <p style={{ opacity: 0.7 }}>⏳ {t("loading")}</p>}
           {msg && <p>{msg}</p>}
 
           {tab === "home" && isB && <LinkCard />}
@@ -275,22 +295,54 @@ export default function MiniApp() {
                     >
                       {v.url}
                     </div>
-                    {isB && (
-                      <div style={{ fontSize: 12, opacity: 0.7 }}>
-                        {t("submittedOn", { d: v.submittedAt })}
-                        {v.approvedAt
-                          ? " · " + t("approvedOn", { d: v.approvedAt })
+                    {/* Timeline: submission, approval, 168-hour tracking window (IST) */}
+                    <div
+                      style={{
+                        fontSize: 12,
+                        opacity: 0.8,
+                        marginTop: 4,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <div>
+                        <b style={{ color: TONE[v.state] }}>
+                          {t(("ts_" + v.state) as Key)}
+                        </b>
+                        {v.state === "TRACKING"
+                          ? " · " + t("dayOf", { d: v.day })
                           : ""}
                       </div>
-                    )}
-                    {v.status === "APPROVED" && isB && (
-                      <div style={{ fontSize: 13, opacity: 0.8 }}>
-                        {v.done ? t("sevenDone") : t("dayOf", { d: v.day })}
+                      <div>
+                        {t("submittedOn", { d: istDateTime(v.submittedAt) })} (
+                        {t(v.via === "BOT" ? "viaBot" : "viaApp")})
                       </div>
-                    )}
+                      {v.approvedAt && (
+                        <div>
+                          {t("approvedOn", { d: istDateTime(v.approvedAt) })}
+                        </div>
+                      )}
+                      {v.trackStart && (
+                        <div>
+                          {t("trackStartOn", { d: istDateTime(v.trackStart) })}
+                        </div>
+                      )}
+                      {v.trackEnd && (
+                        <div>
+                          {t("trackEndOn", { d: istDateTime(v.trackEnd) })}
+                        </div>
+                      )}
+                    </div>
                     {v.status === "APPROVED" && !isB && (
-                      <div style={{ fontSize: 13 }}>
-                        {t("payViews")}: {num(v.views)}
+                      <div style={{ fontSize: 13, marginTop: 4 }}>
+                        {v.state === "COMPLETED" ? (
+                          <>
+                            {t("eligibleViews")}:{" "}
+                            <b>{num(v.eligibleViews ?? 0)}</b> · {t("payment")}
+                            : <b>{inr(v.payment ?? 0)}</b>
+                          </>
+                        ) : (
+                          t("notFinal", { d: istDateTime(v.trackEnd) })
+                        )}
                       </div>
                     )}
                     {v.reason && (
@@ -547,7 +599,7 @@ export default function MiniApp() {
                 onClick={() => {
                   setTab(x);
                   setMsg("");
-                  call({ action: "me" });
+                  if (Date.now() - last.current > 30_000) call({ action: "me" }); // fresh enough: no new request
                 }}
                 style={{
                   flex: 1,
@@ -563,7 +615,7 @@ export default function MiniApp() {
               </button>
             ))}
           </nav>
-        </>
+        </fieldset>
       )}
     </main>
   );

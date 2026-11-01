@@ -5,7 +5,13 @@ import { agentBalance, bloggerBalance } from "./balance";
 import { MIN_WITHDRAW, getAgentBonus } from "./settings";
 import { ownerHint, normalizeVideoUrl, parseAccount } from "./platforms";
 import { getVideoInfo } from "./providers";
-import { submissionOpen, trackDay, trackEnd, weekStartIST } from "./week";
+import {
+  submissionOpen,
+  trackDay,
+  trackEnd,
+  trackState,
+  weekStartIST,
+} from "./week";
 import { randomToken } from "./security";
 import { creditEligible } from "./commission";
 
@@ -180,6 +186,7 @@ export async function submitVideo(
   platform: Platform,
   raw: string,
   only?: SocialAccount | null,
+  via: "APP" | "BOT" = "APP",
 ): Promise<{ ok: true; unverified: boolean } | Err> {
   if (!submissionOpen()) return { error: "e_closed" };
   const url = normalizeVideoUrl(platform, raw);
@@ -233,7 +240,8 @@ export async function submitVideo(
         accountId,
         ownerVerified: verified,
         weekStart: weekStartIST(),
-        trackEndsAt: trackEnd(),
+        trackEndsAt: trackEnd(), // placeholder: replaced by approval time + 168 h when the admin approves
+        submittedVia: via,
       },
     });
     return { ok: true, unverified: !verified && platform !== "OTHER" };
@@ -327,8 +335,30 @@ export async function requestWithdrawal(
   }
 }
 
-const istDate = (d: Date) =>
-  new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
+/** Timeline of one video (ISO timestamps; the app shows them in IST). Tracking = approval timestamp + exactly 168 hours. */
+const timeline = (
+  v: {
+    status: string;
+    createdAt: Date;
+    reviewedAt: Date | null;
+    trackEndsAt: Date;
+    submittedVia: string;
+  },
+  now: Date,
+) => {
+  const approved = v.status === "APPROVED";
+  const state = trackState(v, now);
+  return {
+    state, // PENDING_APPROVAL | TRACKING | COMPLETED | REJECTED
+    via: v.submittedVia,
+    submittedAt: v.createdAt.toISOString(),
+    approvedAt: approved && v.reviewedAt ? v.reviewedAt.toISOString() : null,
+    trackStart: approved ? (v.reviewedAt ?? v.createdAt).toISOString() : null,
+    trackEnd: approved ? v.trackEndsAt.toISOString() : null,
+    day: trackDay(v.trackEndsAt, now),
+    done: state === "COMPLETED",
+  };
+};
 const payRow = (w: any) => ({
   id: w.id,
   amount: num(w.amount),
@@ -422,11 +452,7 @@ export async function bloggerData(id: string) {
       url: v.url,
       status: v.status,
       reason: v.rejectReason,
-      day: trackDay(v.trackEndsAt, now),
-      done: v.trackEndsAt <= now,
-      submittedAt: istDate(v.createdAt),
-      approvedAt:
-        v.status === "APPROVED" && v.reviewedAt ? istDate(v.reviewedAt) : null,
+      ...timeline(v, now),
     })),
     reposts: reposts.map((r) => ({
       id: r.id,
@@ -444,6 +470,7 @@ export async function agentData(id: string) {
     include: { plan: true },
   });
   const mine = { blogger: { agentId: id } };
+  const now = new Date();
   const [bloggers, videos, pays, balance, bonusAgg] = await Promise.all([
     db.blogger.findMany({
       where: { agentId: id, status: { not: "DELETED" } },
@@ -494,8 +521,12 @@ export async function agentData(id: string) {
       platform: v.platform,
       url: v.url,
       status: v.status,
-      views: v.views,
+      reason: v.rejectReason,
       blogger: v.blogger.name,
+      ...timeline(v, now),
+      // Only videos whose 168 hours are complete have final (eligible) views and payment
+      eligibleViews: trackState(v, now) === "COMPLETED" ? v.views : null,
+      payment: trackState(v, now) === "COMPLETED" ? num(v.earnings) : null,
     })),
     payments: pays.map(payRow),
   };

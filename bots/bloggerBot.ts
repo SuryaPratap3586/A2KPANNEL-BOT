@@ -126,7 +126,7 @@ export function bloggerBot(token: string) {
       if (!m) return ctx.reply(tr(l, "pasteLink"), menu(l));
       const platform = detectPlatform(m[0]);
       if (!platform) return ctx.reply("❌ " + tr(l, "e_badUrl"));
-      const r = await submitVideo(blogger.id, platform, m[0]);
+      const r = await submitVideo(blogger.id, platform, m[0], null, "BOT");
       if ("error" in r) return ctx.reply("❌ " + tr(l, r.error));
       await ctx.reply(
         "✅ " + tr(l, r.unverified ? "unverifiedNote" : "submitted"),

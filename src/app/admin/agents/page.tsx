@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
+import Btn from "@/app/admin/Btn";
 import { pageSuper } from "@/lib/auth";
-import { agentBalance } from "@/lib/balance";
+import { agentBalances } from "@/lib/balance";
 import { ensurePlans } from "@/lib/plans";
-import { creditEligible } from "@/lib/commission";
 import { setAgentStatus, setAgentTelegramId, setAgentPlan } from "../actions";
 import AgentForm from "./AgentForm";
 import AdjustForm from "../AdjustForm";
@@ -16,7 +16,7 @@ export default async function Agents({
 }) {
   await pageSuper();
   const plans = await ensurePlans();
-  await creditEligible(); // credit anyone who qualified in the meantime
+  // Bonuses are credited on approval, on account approval and by the cron, so this page only reads.
   const agents = await db.agent.findMany({
     where: { status: { not: "DELETED" } },
     include: { plan: true, _count: { select: { bloggers: true } } },
@@ -24,7 +24,7 @@ export default async function Agents({
     take: 100,
   });
   const [bal, comm] = await Promise.all([
-    Promise.all(agents.map((a) => agentBalance(a.id))),
+    agentBalances(agents.map((a) => a.id)), // 3 queries for the whole list
     db.blogger.groupBy({
       by: ["agentId"],
       where: {
@@ -65,7 +65,7 @@ export default async function Agents({
             </tr>
           </thead>
           <tbody>
-            {agents.map((a, i) => (
+            {agents.map((a) => (
               <tr key={a.id}>
                 <td>
                   {a.name} <PlanBadge code={a.plan?.code} />
@@ -86,7 +86,7 @@ export default async function Agents({
                         </option>
                       ))}
                     </select>
-                    <button className="btn">Set</button>
+                    <Btn className="btn">Set</Btn>
                   </form>
                 </td>
                 <td>
@@ -100,7 +100,7 @@ export default async function Agents({
                       placeholder="not set"
                       className="inp w-32"
                     />
-                    <button className="btn">Save</button>
+                    <Btn className="btn">Save</Btn>
                   </form>
                 </td>
                 <td>
@@ -115,7 +115,7 @@ export default async function Agents({
                     comm.find((c) => c.agentId === a.id)?._sum.agentBonus ?? 0,
                   ).toFixed(2)}
                 </td>
-                <td>{bal[i].toFixed(2)}</td>
+                <td>{(bal.get(a.id) ?? 0).toFixed(2)}</td>
                 <td>{a.status}</td>
                 <td className="max-w-xs truncate">{a.bankDetails ?? "-"}</td>
                 <td>
@@ -128,9 +128,9 @@ export default async function Agents({
                       <form key={s} action={setAgentStatus}>
                         <input type="hidden" name="id" value={a.id} />
                         <input type="hidden" name="status" value={s} />
-                        <button className={s === "ACTIVE" ? "btn-g" : "btn-r"}>
+                        <Btn className={s === "ACTIVE" ? "btn-g" : "btn-r"}>
                           {s}
-                        </button>
+                        </Btn>
                       </form>
                     ))}
                 </td>

@@ -10,6 +10,7 @@ const SUPER_NAV = [
   ["Videos", "/admin/videos"],
   ["Payments", "/admin/payments"],
   ["Rates & bonus", "/admin/rates"],
+  ["Broadcast", "/admin/broadcast"],
   ["Team (admins)", "/admin/team"],
   ["Audit logs", "/admin/audit"],
   ["My account", "/admin/account"],

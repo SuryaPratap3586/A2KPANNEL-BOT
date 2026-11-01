@@ -1,7 +1,8 @@
 import type { Prisma } from "@prisma/client";
+import Btn from "@/app/admin/Btn";
 import { db } from "@/lib/db";
 import { pageStaff } from "@/lib/auth";
-import { trackDay } from "@/lib/week";
+import { istDateTime, trackDay, trackState } from "@/lib/week";
 import PlanBadge from "../PlanBadge";
 import {
   reviewVideo,
@@ -42,15 +43,49 @@ const REASONS = [
 const fmt = (n: number) => n.toLocaleString("en-IN");
 const istDate = (d: Date) =>
   new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
-const istTime = (d: Date) =>
-  d.toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+const STATE: Record<string, [string, string]> = {
+  PENDING_APPROVAL: ["Pending Approval", "text-amber-700"],
+  TRACKING: ["Tracking in Progress", "text-blue-700"],
+  COMPLETED: ["7 Days Completed", "text-green-700"],
+  REJECTED: ["Rejected", "text-red-700"],
+};
+/** Submission, approval and tracking timestamps (IST). Tracking = approval timestamp + exactly 168 hours. */
+function Timeline({
+  v,
+  now,
+}: {
+  v: {
+    status: string;
+    createdAt: Date;
+    reviewedAt: Date | null;
+    trackEndsAt: Date;
+    submittedVia: string;
+  };
+  now: Date;
+}) {
+  const [label, tone] = STATE[trackState(v, now)];
+  return (
+    <div className="text-xs text-slate-500 space-y-0.5 mt-1">
+      <div className={"font-semibold " + tone}>{label}</div>
+      <div>
+        Submitted: {istDateTime(v.createdAt)} (via{" "}
+        {v.submittedVia === "BOT" ? "bot" : "app"})
+      </div>
+      {v.status !== "PENDING" && v.reviewedAt && (
+        <div>
+          {v.status === "APPROVED" ? "Approved" : "Rejected"}:{" "}
+          {istDateTime(v.reviewedAt)}
+        </div>
+      )}
+      {v.status === "APPROVED" && (
+        <>
+          <div>Tracking start: {istDateTime(v.reviewedAt ?? v.createdAt)}</div>
+          <div>Tracking end: {istDateTime(v.trackEndsAt)}</div>
+        </>
+      )}
+    </div>
+  );
+}
 const gained = (v: { liveViews: number; baseViews: number | null }) =>
   Math.max(0, v.liveViews - (v.baseViews ?? v.liveViews)); // views gained since approval
 
@@ -163,9 +198,9 @@ export default async function Videos({
       </div>
       {tab === "TRACKING" && (
         <form action={fetchAllAction}>
-          <button className="btn">
+          <Btn className="btn">
             Fetch views for all running videos (auto)
-          </button>{" "}
+          </Btn>{" "}
           <span className="text-xs text-slate-500">
             The 7 days of a video start on the day you approved it. Its earnings
             are added to the blogger's balance only after the 7 days are
@@ -207,12 +242,16 @@ export default async function Videos({
                     <th>Views now (fetched) and gained since approval</th>
                     <th>Likes</th>
                     <th>Comments</th>
-                    <th>Adjusted views (paid on)</th>
+                    <th>
+                      {tab === "TRACKING"
+                        ? "Adjusted views (not final until the 168 h end)"
+                        : "Eligible views (final, paid on)"}
+                    </th>
                     {me.role === "SUPER" && (
                       <th>
                         {tab === "TRACKING"
-                          ? "Earned so far ₹ (not paid yet)"
-                          : "Earned ₹ (counted)"}
+                          ? "Earned so far ₹ (not in balance yet)"
+                          : "Payment ₹ (final, in balance)"}
                       </th>
                     )}
                     <th>Update</th>
@@ -237,19 +276,7 @@ export default async function Videos({
                     <div className="text-xs text-slate-500">
                       {v.url.slice(0, 44)}
                     </div>
-                    <div className="text-xs text-slate-500">
-                      submitted {istTime(v.createdAt)}
-                    </div>
-                    {v.status === "APPROVED" && v.reviewedAt && (
-                      <div className="text-xs text-slate-500">
-                        approved {istTime(v.reviewedAt)}
-                      </div>
-                    )}
-                    {v.status === "REJECTED" && v.reviewedAt && (
-                      <div className="text-xs text-slate-500">
-                        rejected {istTime(v.reviewedAt)}
-                      </div>
-                    )}
+                    <Timeline v={v} now={now} />
                     {owner(v)}
                   </td>
                   {tab === "PENDING" && (
@@ -257,7 +284,7 @@ export default async function Videos({
                       <form action={reviewVideo}>
                         <input type="hidden" name="id" value={v.id} />
                         <input type="hidden" name="decision" value="APPROVED" />
-                        <button className="btn-g">Approve</button>
+                        <Btn className="btn-g">Approve</Btn>
                       </form>
                       <form action={reviewVideo} className="flex gap-1">
                         <input type="hidden" name="id" value={v.id} />
@@ -270,7 +297,7 @@ export default async function Videos({
                           placeholder="Reason (pick or write)"
                           className="inp w-44"
                         />
-                        <button className="btn-r">Reject</button>
+                        <Btn className="btn-r">Reject</Btn>
                       </form>
                     </td>
                   )}
@@ -282,15 +309,15 @@ export default async function Videos({
                           <>
                             <b>Day {trackDay(v.trackEndsAt, now)} of 7</b>
                             <div className="text-xs text-slate-500">
-                              from {istDate(v.reviewedAt ?? v.createdAt)} to{" "}
-                              {istDate(v.trackEndsAt)}
+                              {istDateTime(v.reviewedAt ?? v.createdAt)} →{" "}
+                              {istDateTime(v.trackEndsAt)} (168 h)
                             </div>
                           </>
                         ) : (
                           <>
                             <b className="text-green-700">7 days completed ✓</b>
                             <div className="text-xs text-slate-500">
-                              on {istDate(v.trackEndsAt)}
+                              at {istDateTime(v.trackEndsAt)}
                             </div>
                           </>
                         )}
@@ -338,12 +365,12 @@ export default async function Videos({
                         <div className="flex gap-1">
                           <form action={fetchOneAction}>
                             <input type="hidden" name="id" value={v.id} />
-                            <button className="btn">Fetch</button>
+                            <Btn className="btn">Fetch</Btn>
                           </form>
                           {v.viewsEdited && (
                             <form action={resetToLiveAction}>
                               <input type="hidden" name="id" value={v.id} />
-                              <button className="btn">Use live</button>
+                              <Btn className="btn">Use live</Btn>
                             </form>
                           )}
                         </div>
@@ -381,7 +408,7 @@ export default async function Videos({
                               className="inp w-full"
                             />
                           </label>
-                          <button className="btn">Save</button>
+                          <Btn className="btn">Save</Btn>
                         </form>
                         <details>
                           <summary className="text-xs underline cursor-pointer">

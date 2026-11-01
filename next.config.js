@@ -8,6 +8,8 @@ const common = [
 module.exports = {
   poweredByHeader: false,
   reactStrictMode: true,
+  // Pages you just visited are reused for 30 s when you navigate back (instant), and every save refreshes them.
+  experimental: { staleTimes: { dynamic: 30, static: 180 } },
   async headers() {
     return [
       { source: "/((?!app).*)", headers: [...common, { key: "X-Frame-Options", value: "DENY" }, { key: "Content-Security-Policy", value: "frame-ancestors 'none'" }] },

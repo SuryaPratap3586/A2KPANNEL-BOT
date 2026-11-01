@@ -1,5 +1,5 @@
-// Weekly cycle, all in IST (UTC+5:30, no daylight saving):
-//   submit Monday-Friday, views counted until Saturday 23:59, then frozen.
+// Time rules, all in IST (UTC+5:30, no daylight saving):
+//   submit Monday-Friday; every approved video is then tracked for its own 168 hours.
 const IST = 5.5 * 3600_000,
   DAY = 86_400_000;
 export const toIST = (d: Date) => new Date(d.getTime() + IST);
@@ -29,17 +29,45 @@ export function istDay(d = new Date()): Date {
   );
 }
 
-/** Every video is tracked for its OWN 7 days, counted from the day the admin APPROVES it (IST): day 1 = approval day, day 7 ends at 23:59:59 IST.
- *  Approved on Monday -> ends Sunday night, approved on Tuesday -> ends Monday night, and so on. */
+/** Every video is tracked for its OWN 7 days: exactly 168 hours from the moment the admin APPROVES it.
+ *  Approved Monday 10:30 -> completes next Monday 10:30; approved Tuesday 16:05 -> completes next Tuesday 16:05. */
+export const TRACK_MS = 168 * 3600_000;
 export function trackEnd(approved = new Date()): Date {
-  return new Date(istDay(approved).getTime() - IST + 7 * DAY - 1000);
+  return new Date(approved.getTime() + TRACK_MS);
 }
+/** Start of the tracking window (= the approval timestamp). */
+export const trackStart = (trackEndsAt: Date) =>
+  new Date(trackEndsAt.getTime() - TRACK_MS);
 
-/** Which tracking day (1 to 7) a video is on; stays 7 once the 7 days are complete. */
+/** Which tracking day (1 to 7) a video is on; stays 7 once the 168 hours are complete. */
 export function trackDay(trackEndsAt: Date, now = new Date()): number {
-  const start = trackEndsAt.getTime() + 1000 - 7 * DAY;
+  const start = trackStart(trackEndsAt).getTime();
   return Math.min(
     7,
     Math.max(1, Math.floor((now.getTime() - start) / DAY) + 1),
   );
 }
+
+export type TrackState = "PENDING_APPROVAL" | "TRACKING" | "COMPLETED" | "REJECTED";
+/** Pending Approval -> Tracking in Progress -> 7 Days Completed (or Rejected). Completion is automatic: it only depends on the clock. */
+export function trackState(
+  v: { status: string; trackEndsAt: Date },
+  now = new Date(),
+): TrackState {
+  if (v.status === "PENDING") return "PENDING_APPROVAL";
+  if (v.status === "REJECTED") return "REJECTED";
+  return v.trackEndsAt <= now ? "COMPLETED" : "TRACKING";
+}
+
+/** "01 Nov 2026, 10:30 am" in IST (works on the server and in the browser). */
+export const istDateTime = (d: Date | string | null | undefined) =>
+  d
+    ? new Date(d).toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
