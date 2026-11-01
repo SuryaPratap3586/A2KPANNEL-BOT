@@ -135,9 +135,13 @@ export async function fetchOneAction(fd: FormData) {
   back(
     "/admin/videos?status=TRACKING",
     {
-      ok: "Views fetched.",
+      ok: "Live views fetched. Money is calculated only at the final fetch, after the 168 hours.",
+      final:
+        "Final views fetched: gained views and earnings are saved, tracking is closed.",
+      nobase:
+        "Final views fetched, but the starting views were never fetched, so the gain is unknown. Enter the views manually.",
       closed:
-        "Tracking is closed for this video (its 168 hours are over).",
+        "Tracking is closed for this video (final views already saved). Correct the views manually if needed.",
       nodata:
         "Could not fetch views (API not set up for this platform, or the video is private). Enter views manually.",
       notapproved: "This video is not approved.",
@@ -146,13 +150,15 @@ export async function fetchOneAction(fd: FormData) {
 }
 
 export async function fetchAllAction() {
-  // automatic fetch for all approved videos of the running weeks
+  // the due fetches: missing starting views + final views of videos whose 168 hours are over
   const me = await requireStaff();
   const r = await fetchAll(me.id, 45_000);
   await log(me.email, "VIEWS_FETCH_ALL", `${r.updated}/${r.tried}`);
   back(
     "/admin/videos?status=TRACKING",
-    `Fetched ${r.updated} of ${r.tried} videos.${r.remaining ? ` ${r.remaining} more are left, press again.` : ""} Videos without auto data need manual views.`,
+    r.tried
+      ? `Fetched ${r.updated} of ${r.tried} due videos.${r.remaining ? ` ${r.remaining} more are left, press again.` : ""} Videos without auto data need manual views.`
+      : "Nothing is due: no video needs its starting or final views right now.",
   );
 }
 

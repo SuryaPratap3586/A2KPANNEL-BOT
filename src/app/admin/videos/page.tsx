@@ -199,25 +199,28 @@ export default async function Videos({
       {tab === "TRACKING" && (
         <form action={fetchAllAction}>
           <Btn className="btn">
-            Fetch views for all running videos (auto)
+            Run due fetches now (starting + final views)
           </Btn>{" "}
           <span className="text-xs text-slate-500">
-            The 7 days of a video start on the day you approved it. Its earnings
-            are added to the blogger's balance only after the 7 days are
-            complete.
+            Views are fetched twice: at approval (starting views) and once the
+            168 hours are over (final views). Gained views = final - starting;
+            earnings are calculated on them and count in the balance from then
+            on. The hourly cron does this automatically. "Fetch" on a row only
+            shows the current live views, it does not change money.
           </span>
         </form>
       )}
       {tab === "COMPLETED" && (
         <p className="text-xs text-slate-500">
-          These videos finished their 7 days. Their earnings are counted in the
-          blogger's balance (payment).
+          These videos finished their 168 hours. Gained views (final - starting)
+          and earnings are calculated at the final fetch and counted in the
+          blogger's balance. You can still correct the views manually.
         </p>
       )}
       {tab === "PENDING" && (
         <p className="text-xs text-slate-500">
-          The 7 days of a video start on the day you approve it. The submitted
-          time is shown under each video.
+          Approving a video fetches its starting views and starts its own 168
+          hours. The submitted time is shown under each video.
         </p>
       )}
       <datalist id="reasons">
@@ -325,25 +328,32 @@ export default async function Videos({
                       <td>
                         <b>{fmt(v.liveViews)}</b>
                         <div className="text-xs text-slate-500">
-                          at approval:{" "}
+                          starting (at approval):{" "}
                           {v.baseViews === null
-                            ? "not fetched yet"
+                            ? "not fetched"
                             : fmt(v.baseViews)}
                         </div>
                         <div className="text-xs text-slate-500">
-                          gained in the 7 days: <b>{fmt(gained(v))}</b>
+                          {tab === "COMPLETED" ? "final gained" : "gained so far"}:{" "}
+                          <b>{fmt(gained(v))}</b>
                         </div>
                       </td>
                       <td>{fmt(v.likes)}</td>
                       <td>{fmt(v.comments)}</td>
                       <td>
                         <b>{fmt(v.views)}</b>
-                        {!v.viewsEdited &&
-                          v.views === 0 &&
-                          v.liveViews > 0 &&
-                          process.env.PAY_ONLY_ADJUSTED !== "false" && (
+                        {tab === "TRACKING" && !v.viewsEdited && (
+                          <div className="text-xs text-slate-500">
+                            calculated at the final fetch
+                          </div>
+                        )}
+                        {tab === "COMPLETED" &&
+                          !v.viewsEdited &&
+                          (v.baseViews === null || !v.frozen) && (
                             <div className="text-xs text-amber-700">
-                              not adjusted yet, no pay
+                              {v.baseViews === null
+                                ? "starting views missing: enter the views manually"
+                                : "waiting for the final fetch (next hourly run)"}
                             </div>
                           )}
                         {v.viewsEdited && (

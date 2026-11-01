@@ -87,9 +87,19 @@ export async function resetToLive(videoId: string, actorId?: string) {
   return true;
 }
 
-export type FetchResult = "ok" | "closed" | "nodata" | "notapproved";
+export type FetchResult =
+  | "ok" // fetched during tracking (starting views, or a live check that does not touch money)
+  | "final" // final fetch after the 168 hours: gained views and earnings saved, video frozen
+  | "nobase" // final fetch done, but the starting views were never fetched: enter the views manually
+  | "closed"
+  | "nodata"
+  | "notapproved";
 
-/** Fetch live views / likes / comments of one approved video. Payable views follow live views unless the admin edited them. */
+/** One fetch of an approved video.
+ *  - Before the 168 hours end: saves the live numbers; the first successful fetch is the STARTING views (baseViews). No money is calculated.
+ *  - After the 168 hours end (final fetch): gained views = final views - starting views; earnings are calculated on them and the video is frozen.
+ *    If the admin already typed the views, the typed number is kept. Afterwards the admin can still correct the views manually.
+ *  Set PAY_ONLY_ADJUSTED="true" to never calculate earnings automatically (admin types every number). */
 export async function refreshVideo(
   videoId: string,
   source: "AUTO" | "FETCH",
@@ -100,38 +110,55 @@ export async function refreshVideo(
   if (v.frozen) return "closed";
   const info = await getVideoInfo(v.platform, v.url).catch(() => null);
   if (!info || info.views === undefined) return "nodata";
-  // The first fetch after approval is the starting point: only the views that come AFTER it (inside the 7 days) are counted.
-  const base = v.baseViews ?? info.views;
+  const now = new Date();
+  const final = v.trackEndsAt <= now;
+  // the starting point can only be taken while the video is tracking (never at the end: that would make the gain 0)
+  const takeBase = v.baseViews === null && !final;
   await db.video.update({
     where: { id: videoId },
     data: {
       liveViews: info.views,
       likes: info.likes ?? v.likes,
       comments: info.comments ?? v.comments,
-      lastFetchedAt: new Date(),
-      ...(v.baseViews === null
-        ? { baseViews: info.views, baseAt: new Date() }
-        : {}),
+      lastFetchedAt: now,
+      ...(takeBase ? { baseViews: info.views, baseAt: now } : {}),
+      ...(final ? { frozen: true } : {}),
     },
   });
-  // Default: money is calculated ONLY on the views the admin adjusts and saves. Set PAY_ONLY_ADJUSTED="false" to let payable views follow the fetched views automatically.
-  if (process.env.PAY_ONLY_ADJUSTED === "false" && !v.viewsEdited)
-    await applyViews(videoId, Math.max(0, info.views - base), source, actorId);
+  let r: FetchResult = "ok";
+  if (final) {
+    if (v.baseViews === null) r = "nobase";
+    else {
+      if (!v.viewsEdited && process.env.PAY_ONLY_ADJUSTED !== "true")
+        await applyViews(videoId, Math.max(0, info.views - v.baseViews), source, actorId); // views gained in the 168 hours
+      r = "final";
+    }
+  }
   await recordStat(videoId);
-  return "ok";
+  return r;
 }
 
-/** Run EVERY HOUR (each video ends at its own time, so a nightly run is not enough).
- *  - Each approved video is tracked for ITS OWN 168 hours from the approval timestamp, then frozen.
- *  - The last hour before the end = final fetch (an hourly cron always hits it). A missed end gets one catch-up fetch.
- *  - Works inside a time budget so serverless hosts do not time out; call again to continue. */
+const HOUR = 3600_000;
+
+/** Run EVERY HOUR. Each approved video is fetched only twice:
+ *  1. STARTING views right after approval (done by the Approve button; if that failed, retried here during the first 6 hours).
+ *  2. FINAL views once its own 168 hours are over (the first hourly run after the end). Then earnings are calculated and the video is frozen.
+ *  If the final fetch keeps failing for 24 hours the video is frozen anyway and the admin types the views.
+ *  Works inside a time budget so serverless hosts do not time out; call again to continue. */
 export async function fetchAll(actorId?: string, budgetMs = 45_000) {
   const t0 = Date.now(),
     now = new Date();
   const vids = await db.video.findMany({
-    where: { status: "APPROVED", frozen: false },
-    orderBy: { lastFetchedAt: { sort: "asc", nulls: "first" } },
-    select: { id: true, trackEndsAt: true, lastFetchedAt: true },
+    where: {
+      status: "APPROVED",
+      frozen: false,
+      OR: [
+        { trackEndsAt: { lte: now } }, // due for the final fetch
+        { baseViews: null, reviewedAt: { gte: new Date(now.getTime() - 6 * HOUR) } }, // starting views still missing
+      ],
+    },
+    orderBy: { trackEndsAt: "asc" },
+    select: { id: true, trackEndsAt: true },
   });
   let tried = 0,
     updated = 0,
@@ -141,28 +168,11 @@ export async function fetchAll(actorId?: string, budgetMs = 45_000) {
       remaining++;
       continue;
     }
-    const end = v.trackEndsAt,
-      finalFrom = new Date(end.getTime() - 60 * 60_000);
-    const inFinal = now >= finalFrom;
-    if (inFinal && v.lastFetchedAt && v.lastFetchedAt >= finalFrom) {
-      await db.video.update({ where: { id: v.id }, data: { frozen: true } });
-      continue;
-    }
-    if (
-      !inFinal &&
-      !actorId &&
-      v.lastFetchedAt &&
-      now.getTime() - v.lastFetchedAt.getTime() < 6 * 3600_000
-    )
-      continue; // already fetched today
     tried++;
     const r = await refreshVideo(v.id, actorId ? "FETCH" : "AUTO", actorId);
-    if (r === "ok") {
-      updated++;
-      if (inFinal)
-        await db.video.update({ where: { id: v.id }, data: { frozen: true } });
-    } else if (now.getTime() > end.getTime() + 24 * 3600_000)
-      await db.video.update({ where: { id: v.id }, data: { frozen: true } }); // give up after a day
+    if (r !== "nodata" && r !== "notapproved") updated++;
+    else if (now.getTime() > v.trackEndsAt.getTime() + 24 * HOUR)
+      await db.video.update({ where: { id: v.id }, data: { frozen: true } }); // final fetch impossible: admin types the views
   }
   return { tried, updated, remaining };
 }

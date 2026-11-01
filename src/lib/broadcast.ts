@@ -115,7 +115,7 @@ export function startBroadcastWorker(tokens: { BLOGGER?: string; AGENT?: string 
     try {
       while ((await processBroadcasts(tokens)) > 0) {} // keep going while there is work
     } catch (e: any) {
-      console.error("broadcast worker:", e?.code ?? e?.name ?? "error");
+      console.error("broadcast worker:", e);
     } finally {
       busy = false;
     }
@@ -130,3 +130,6 @@ export async function deliveryStats(ids: string[]) {
   for (const r of g) out.get(r.broadcastId)![r.status] = r._count._all;
   return out;
 }
+
+
+

@@ -35,8 +35,10 @@ Flow: **Admin → Agent bot → (one-time link) → Blogger bot → Admin modera
 - Status: **Pending Approval → Tracking in Progress → 7 Days Completed** (or Rejected). Completion is automatic (it depends only on the clock).
 - Only completed videos count: their **eligible views** and **payment** enter the balance. Videos still tracking never enter a balance or a payment request.
 - Admin Panel (Videos) and the Mini App show for every video: submission time, approval time, tracking start, tracking end, status, eligible views and payment (payment for agents and admins).
-- Cron: call `GET /api/cron/fetch-views` (header `Authorization: Bearer $CRON_SECRET`) **every hour**. The last hour before a video's end is its final fetch, then it is frozen. The same call deletes day-wise stats and repost records older than **14 days** and audit logs older than 3 days (videos and earnings are kept, balances never change).
-- Manual views: on Videos (Tracking / Completed) type the adjusted views. Earnings are calculated on the difference only (no double counting) and follow the same rule: they count only after the 168 hours.
+- **Views are fetched twice per video:** (1) **starting views** right after approval (Approve button; retried by the cron for 6 hours if it failed), (2) **final views** at the first hourly cron run after its 168 hours end. **Gained views = final - starting**; earnings are calculated on the gained views at that moment and the video is frozen. No views are fetched in between (the Fetch button on a row only shows the current live views and never changes money). Set `PAY_ONLY_ADJUSTED="true"` to calculate nothing automatically.
+- Cron: call `GET /api/cron/fetch-views` (header `Authorization: Bearer $CRON_SECRET`) **every hour**, so each final fetch happens within an hour of the end. If the final fetch fails for 24 hours the video is frozen and the admin types the views. The same call deletes day-wise stats and repost records older than **14 days** and audit logs older than 3 days (videos and earnings are kept, balances never change).
+- Manual views: after the final fetch the admin can correct the views on Videos → Completed. Earnings change by the difference only (no double counting). A typed number is never overwritten by a fetch (button **Use live** goes back to final - starting).
+- **Live views** = fetched from the platform. **Adjusted / eligible views** = what the blogger is paid on (gained views from the final fetch, or the number the admin typed).
 - Moving an existing database to the 168-hour rule: `npm run db:retrack` (changes only videos that are still tracking; completed videos and paid money are not touched).
 
 ## Broadcast
@@ -44,7 +46,6 @@ Flow: **Admin → Agent bot → (one-time link) → Blogger bot → Admin modera
 - Admin → **Broadcast** (super admin only): write a message, pick **All bloggers and agents / All bloggers / All agents / Bloggers of one agent**, the number of recipients is shown, confirm, send.
 - Bloggers get it from the blogger bot, agents from the agent bot (only active users). Sending is done by `npm run bots` (must be running): about 20 messages / second per bot, Telegram 429 "retry after" is respected, temporary errors are retried up to 3 times, users who blocked the bot are marked failed.
 - The history shows sent / failed / waiting per broadcast (live while sending), with **Stop** and **Retry failed**.
-- **Live views** = fetched from the platform. **Payable views** = what the blogger sees and is paid on. Admin can type payable views on Videos; after that, fetch updates only the live numbers (button **Use live** goes back). In the app the blogger sees payable views, and the **Live views** button shows the actual ones.
 
 ## Account check
 
