@@ -36,10 +36,15 @@ Flow: **Admin → Agent bot → (one-time link) → Blogger bot → Admin modera
 - Status: **Pending Approval → Tracking in Progress → 7 Days Completed** (or Rejected). Completion is automatic (it depends only on the clock).
 - Only completed videos count: their **eligible views** and **payment** enter the balance. Videos still tracking never enter a balance or a payment request.
 - Admin Panel (Videos) and the Mini App show for every video: submission time, approval time, tracking start, tracking end, status, eligible views and payment (payment for agents and admins).
+<<<<<<< HEAD
 - **Actual views are fetched twice per video:** (1) **starting views** right after approval (Approve button; retried by the cron for 6 hours if it failed), (2) **final views** at the first hourly cron run after its 168 hours end; then the video is frozen. The Videos page shows them as **Actual views** (starting, final, gained = final - starting). Fetched views are information only: **they never create a payment.**
 - Cron: call `GET /api/cron/fetch-views` (header `Authorization: Bearer $CRON_SECRET`) **every hour**, so each final fetch happens within an hour of the end. If the final fetch fails for 24 hours the video is frozen and the admin types the views. The same call deletes day-wise stats and repost records older than **14 days** and audit logs older than 3 days (videos and earnings are kept, balances never change).
 - **Payable views (the only source of payment):** after the 168 hours the admin enters the payable views on Videos → Completed (the field is pre-filled with the gained views; nothing is paid until **Save**). Payment = payable views / 1,000,000 x rate. Payable views cannot be entered while a video is still tracking. They can be changed later; only the difference is added or removed (no double counting). Until they are entered the video shows "not entered yet: no payment" (and in the agent app "Payable views not entered by admin yet").
 - **Actual views** = fetched from the platform. **Payable views** = entered by the admin, what the blogger is paid on.
+=======
+- Cron: call `GET /api/cron/fetch-views` (header `Authorization: Bearer $CRON_SECRET`) **every hour**. The last hour before a video's end is its final fetch, then it is frozen. The same call deletes day-wise stats and repost records older than **14 days** and audit logs older than 3 days (videos and earnings are kept, balances never change).
+- Manual views: on Videos (Tracking / Completed) type the adjusted views. Earnings are calculated on the difference only (no double counting) and follow the same rule: they count only after the 168 hours.
+>>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
 - Moving an existing database to the 168-hour rule: `npm run db:retrack` (changes only videos that are still tracking; completed videos and paid money are not touched).
 
 ## Broadcast
@@ -47,11 +52,15 @@ Flow: **Admin → Agent bot → (one-time link) → Blogger bot → Admin modera
 - Admin → **Broadcast** (super admin only): write a message, pick **All bloggers and agents / All bloggers / All agents / Bloggers of one agent**, the number of recipients is shown, confirm, send.
 - Bloggers get it from the blogger bot, agents from the agent bot (only active users). Sending is done by `npm run bots` (must be running): about 20 messages / second per bot, Telegram 429 "retry after" is respected, temporary errors are retried up to 3 times, users who blocked the bot are marked failed.
 - The history shows sent / failed / waiting per broadcast (live while sending), with **Stop** and **Retry failed**.
+<<<<<<< HEAD
 =======
 - Links can be submitted **Monday to Friday**. Views are tracked until **Saturday 11:59 PM** of the submission week, then frozen.
 - Cron: call `GET /api/cron/fetch-views` (header `Authorization: Bearer $CRON_SECRET`) **every night at 23:59 IST**. Each run saves that day's views / likes / comments (the 7-day day-wise table), the Saturday run is the final fetch. The same call deletes day-wise stats and repost records older than **14 days** (videos and earnings are kept, balances never change).
 - **Live views** = fetched from the platform. **Payable views** = what the blogger sees and is paid on. Admin can type payable views on Videos; after that, fetch updates only the live numbers (button **Use live** goes back). In the app the blogger sees payable views, and the **Live views** button shows the actual ones.
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
+=======
+- **Live views** = fetched from the platform. **Payable views** = what the blogger sees and is paid on. Admin can type payable views on Videos; after that, fetch updates only the live numbers (button **Use live** goes back). In the app the blogger sees payable views, and the **Live views** button shows the actual ones.
+>>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
 
 ## Account check
 

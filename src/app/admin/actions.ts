@@ -185,6 +185,7 @@ export async function fetchOneAction(fd: FormData) {
     "/admin/videos?status=APPROVED",
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
     {
+<<<<<<< HEAD
       ok: "Actual views fetched (information only, no payment).",
       final:
         "Final actual views fetched and tracking closed. Now enter the payable views on the Completed tab.",
@@ -196,6 +197,11 @@ export async function fetchOneAction(fd: FormData) {
 =======
         "Tracking is closed for this video (its week ended Saturday 11:59 PM).",
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
+=======
+      ok: "Views fetched.",
+      closed:
+        "Tracking is closed for this video (its 168 hours are over).",
+>>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
       nodata:
         "Fetching failed: the reason is shown under the video (Fetch status). You can enter the views manually.",
       notapproved: "This video is not approved.",
@@ -204,13 +210,14 @@ export async function fetchOneAction(fd: FormData) {
 }
 
 export async function fetchAllAction() {
-  // the due fetches: missing starting views + final views of videos whose 168 hours are over
+  // automatic fetch for all approved videos of the running weeks
   const me = await requireStaff();
   const r = await fetchAll(me.id, 45_000);
   await log(me.email, "VIEWS_FETCH_ALL", `${r.updated}/${r.tried}`);
   back(
 <<<<<<< HEAD
     "/admin/videos?status=TRACKING",
+<<<<<<< HEAD
     r.tried
       ? `Fetched ${r.updated} of ${r.tried} due videos.${r.remaining ? ` ${r.remaining} more are left, press again.` : ""} Videos without auto data need manual views.`
       : "Nothing is due: no video needs its starting or final views right now.",
@@ -218,6 +225,9 @@ export async function fetchAllAction() {
     "/admin/videos?status=APPROVED",
     `Fetched ${r.updated} of ${r.tried} videos.${r.remaining ? ` ${r.remaining} more are left, press again.` : ""} Videos without auto data need manual views.`,
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+    `Fetched ${r.updated} of ${r.tried} videos.${r.remaining ? ` ${r.remaining} more are left, press again.` : ""} Videos without auto data need manual views.`,
+>>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
   );
 }
 

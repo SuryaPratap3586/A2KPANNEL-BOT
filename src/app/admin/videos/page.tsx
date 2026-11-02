@@ -220,6 +220,7 @@ export default async function Videos({
           <Btn className="btn">Run due fetches now</Btn>
 =======
         <form action={fetchAllAction}>
+<<<<<<< HEAD
           <button className="btn">
             Fetch views for all running videos (auto)
           </button>{" "}
@@ -234,6 +235,28 @@ export default async function Videos({
         <p className="text-xs text-slate-500">
           Approving a video fetches its initial views and starts its own 168
           hours. The submitted time is shown under each video.
+=======
+          <Btn className="btn">
+            Fetch views for all running videos (auto)
+          </Btn>{" "}
+          <span className="text-xs text-slate-500">
+            The 7 days of a video start on the day you approved it. Its earnings
+            are added to the blogger's balance only after the 7 days are
+            complete.
+          </span>
+        </form>
+      )}
+      {tab === "COMPLETED" && (
+        <p className="text-xs text-slate-500">
+          These videos finished their 7 days. Their earnings are counted in the
+          blogger's balance (payment).
+        </p>
+      )}
+      {tab === "PENDING" && (
+        <p className="text-xs text-slate-500">
+          The 7 days of a video start on the day you approve it. The submitted
+          time is shown under each video.
+>>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
         </p>
       )}
 =======

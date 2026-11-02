@@ -92,18 +92,16 @@ export async function resetToLive(videoId: string, actorId?: string) {
   return true;
 }
 
-export type FetchResult =
-  | "ok" // fetched during tracking (starting views, or a live check that does not touch money)
-  | "final" // final fetch after the 168 hours: gained views and earnings saved, video frozen
-  | "nobase" // final fetch done, but the starting views were never fetched: enter the views manually
-  | "closed"
-  | "nodata"
-  | "notapproved";
+export type FetchResult = "ok" | "closed" | "nodata" | "notapproved";
 
+<<<<<<< HEAD
 /** One fetch of an approved video. Fetched numbers are ACTUAL views only: they never create earnings.
  *  - Before the 168 hours end: saves the live numbers; the first successful fetch is the STARTING views (baseViews).
  *  - After the 168 hours end (final fetch): saves the final live views (gained = final - starting is shown to the admin) and freezes the video.
  *  Money: the admin enters the payable views after the 168 hours (setViews); earnings are calculated only from those. */
+=======
+/** Fetch live views / likes / comments of one approved video. Payable views follow live views unless the admin edited them. */
+>>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
 export async function refreshVideo(
   videoId: string,
   source: "AUTO" | "FETCH",
@@ -133,13 +131,19 @@ export async function refreshVideo(
 =======
   const info = await getVideoInfo(v.platform, v.url).catch(() => null);
   if (!info || info.views === undefined) return "nodata";
+<<<<<<< HEAD
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+  // The first fetch after approval is the starting point: only the views that come AFTER it (inside the 7 days) are counted.
+  const base = v.baseViews ?? info.views;
+>>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
   await db.video.update({
     where: { id: videoId },
     data: {
       liveViews: views,
       likes: info.likes ?? v.likes,
       comments: info.comments ?? v.comments,
+<<<<<<< HEAD
 <<<<<<< HEAD
       lastFetchedAt: now,
       fetchStatus: "OK",
@@ -181,10 +185,30 @@ const HOUR = 3600_000;
  *  - Last 15 minutes before that = final fetch. Videos approved after the week ended get one catch-up fetch.
  *  - Works inside a time budget so serverless hosts do not time out; call again to continue. */
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+      lastFetchedAt: new Date(),
+      ...(v.baseViews === null
+        ? { baseViews: info.views, baseAt: new Date() }
+        : {}),
+    },
+  });
+  // Default: money is calculated ONLY on the views the admin adjusts and saves. Set PAY_ONLY_ADJUSTED="false" to let payable views follow the fetched views automatically.
+  if (process.env.PAY_ONLY_ADJUSTED === "false" && !v.viewsEdited)
+    await applyViews(videoId, Math.max(0, info.views - base), source, actorId);
+  await recordStat(videoId);
+  return "ok";
+}
+
+/** Run EVERY HOUR (each video ends at its own time, so a nightly run is not enough).
+ *  - Each approved video is tracked for ITS OWN 168 hours from the approval timestamp, then frozen.
+ *  - The last hour before the end = final fetch (an hourly cron always hits it). A missed end gets one catch-up fetch.
+ *  - Works inside a time budget so serverless hosts do not time out; call again to continue. */
+>>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
 export async function fetchAll(actorId?: string, budgetMs = 45_000) {
   const t0 = Date.now(),
     now = new Date();
   const vids = await db.video.findMany({
+<<<<<<< HEAD
 <<<<<<< HEAD
     where: {
       status: "APPROVED",
@@ -201,6 +225,11 @@ export async function fetchAll(actorId?: string, budgetMs = 45_000) {
     orderBy: { lastFetchedAt: { sort: "asc", nulls: "first" } },
     select: { id: true, weekStart: true, lastFetchedAt: true },
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+    where: { status: "APPROVED", frozen: false },
+    orderBy: { lastFetchedAt: { sort: "asc", nulls: "first" } },
+    select: { id: true, trackEndsAt: true, lastFetchedAt: true },
+>>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
   });
   let tried = 0,
     updated = 0,
@@ -212,12 +241,17 @@ export async function fetchAll(actorId?: string, budgetMs = 45_000) {
     }
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     const end = weekEnd(v.weekStart),
 =======
     const end = v.trackEndsAt,
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
       finalFrom = new Date(end.getTime() - 15 * 60_000);
+=======
+    const end = v.trackEndsAt,
+      finalFrom = new Date(end.getTime() - 60 * 60_000);
+>>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
     const inFinal = now >= finalFrom;
     if (inFinal && v.lastFetchedAt && v.lastFetchedAt >= finalFrom) {
       await db.video.update({ where: { id: v.id }, data: { frozen: true } });
@@ -230,12 +264,18 @@ export async function fetchAll(actorId?: string, budgetMs = 45_000) {
       now.getTime() - v.lastFetchedAt.getTime() < 6 * 3600_000
     )
       continue; // already fetched today
+<<<<<<< HEAD
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+>>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
     tried++;
     const r = await refreshVideo(v.id, actorId ? "FETCH" : "AUTO", actorId);
-    if (r !== "nodata" && r !== "notapproved") updated++;
-    else if (now.getTime() > v.trackEndsAt.getTime() + 24 * HOUR)
-      await db.video.update({ where: { id: v.id }, data: { frozen: true } }); // final fetch impossible: admin types the views
+    if (r === "ok") {
+      updated++;
+      if (inFinal)
+        await db.video.update({ where: { id: v.id }, data: { frozen: true } });
+    } else if (now.getTime() > end.getTime() + 24 * 3600_000)
+      await db.video.update({ where: { id: v.id }, data: { frozen: true } }); // give up after a day
   }
   return { tried, updated, remaining };
 }
