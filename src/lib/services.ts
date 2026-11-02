@@ -585,6 +585,7 @@ export async function agentData(id: string) {
       blogger: v.blogger.name,
 <<<<<<< HEAD
       ...timeline(v, now),
+<<<<<<< HEAD
       // Final (eligible) views and payment exist only after the 168 hours AND after the admin entered the payable views
       eligibleViews:
         trackState(v, now) === "COMPLETED" && v.viewsEdited ? v.views : null,
@@ -594,6 +595,11 @@ export async function agentData(id: string) {
           : null,
 =======
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
+=======
+      // Only videos whose 168 hours are complete have final (eligible) views and payment
+      eligibleViews: trackState(v, now) === "COMPLETED" ? v.views : null,
+      payment: trackState(v, now) === "COMPLETED" ? num(v.earnings) : null,
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
     })),
     payments: pays.map(payRow),
   };

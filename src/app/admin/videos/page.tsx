@@ -12,8 +12,18 @@ import { pageStaff } from "@/lib/auth";
 import { trackDay } from "@/lib/week";
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 import PlanBadge from "../PlanBadge";
+<<<<<<< HEAD
 import { reviewVideo, fetchAllAction } from "../actions";
 import VideoCard from "./VideoCard";
+=======
+import {
+  reviewVideo,
+  setViews,
+  fetchOneAction,
+  fetchAllAction,
+  resetToLiveAction,
+} from "../actions";
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
 export const dynamic = "force-dynamic";
 <<<<<<< HEAD
 
@@ -240,16 +250,30 @@ export default async function Videos({
             Fetch views for all running videos (auto)
           </Btn>{" "}
           <span className="text-xs text-slate-500">
+<<<<<<< HEAD
             The 7 days of a video start on the day you approved it. Its earnings
             are added to the blogger's balance only after the 7 days are
             complete.
+=======
+            Views are fetched twice: at approval (starting views) and once the
+            168 hours are over (final views). Gained views = final - starting;
+            earnings are calculated on them and count in the balance from then
+            on. The hourly cron does this automatically. "Fetch" on a row only
+            shows the current live views, it does not change money.
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
           </span>
         </form>
       )}
       {tab === "COMPLETED" && (
         <p className="text-xs text-slate-500">
+<<<<<<< HEAD
           These videos finished their 7 days. Their earnings are counted in the
           blogger's balance (payment).
+=======
+          These videos finished their 168 hours. Gained views (final - starting)
+          and earnings are calculated at the final fetch and counted in the
+          blogger's balance. You can still correct the views manually.
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
         </p>
       )}
       {tab === "PENDING" && (
@@ -292,6 +316,7 @@ export default async function Videos({
                 {tab !== "PENDING" && <th>Reviewed by</th>}
                 {tab === "APPROVED" && (
                   <>
+<<<<<<< HEAD
                     <th>Actual views (fetched)</th>
                     <th>Likes</th>
                     <th>Comments</th>
@@ -304,6 +329,22 @@ export default async function Videos({
                         {tab === "TRACKING"
                           ? "Earned so far ₹ (not paid yet)"
                           : "Earned ₹ (counted)"}
+=======
+                    <th>7-day window</th>
+                    <th>Views now (fetched) and gained since approval</th>
+                    <th>Likes</th>
+                    <th>Comments</th>
+                    <th>
+                      {tab === "TRACKING"
+                        ? "Adjusted views (not final until the 168 h end)"
+                        : "Eligible views (final, paid on)"}
+                    </th>
+                    {me.role === "SUPER" && (
+                      <th>
+                        {tab === "TRACKING"
+                          ? "Earned so far ₹ (not in balance yet)"
+                          : "Payment ₹ (final, in balance)"}
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
                       </th>
                     )}
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
@@ -419,12 +460,27 @@ export default async function Videos({
                       <td>{fmt(v.comments)}</td>
                       <td>
                         <b>{fmt(v.views)}</b>
+<<<<<<< HEAD
                         {!v.viewsEdited &&
                           v.views === 0 &&
                           v.liveViews > 0 &&
                           process.env.PAY_ONLY_ADJUSTED !== "false" && (
                             <div className="text-xs text-amber-700">
                               not adjusted yet, no pay
+=======
+                        {tab === "TRACKING" && !v.viewsEdited && (
+                          <div className="text-xs text-slate-500">
+                            calculated at the final fetch
+                          </div>
+                        )}
+                        {tab === "COMPLETED" &&
+                          !v.viewsEdited &&
+                          (v.baseViews === null || !v.frozen) && (
+                            <div className="text-xs text-amber-700">
+                              {v.baseViews === null
+                                ? "starting views missing: enter the views manually"
+                                : "waiting for the final fetch (next hourly run)"}
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
                             </div>
                           )}
                         {v.viewsEdited && (
@@ -451,7 +507,11 @@ export default async function Videos({
                           {v.viewsEdited && (
                             <form action={resetToLiveAction}>
                               <input type="hidden" name="id" value={v.id} />
+<<<<<<< HEAD
                               <button className="btn">Use live</button>
+=======
+                              <Btn className="btn">Use live</Btn>
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
                             </form>
                           )}
                         </div>
@@ -464,7 +524,11 @@ export default async function Videos({
                               type="number"
                               min={0}
                               defaultValue={
+<<<<<<< HEAD
                                 v.viewsEdited || v.views ? v.views : v.liveViews
+=======
+                                v.viewsEdited || v.views ? v.views : gained(v)
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
                               }
                               className="inp w-full"
                             />

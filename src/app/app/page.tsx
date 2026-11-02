@@ -397,9 +397,7 @@ export default function MiniApp() {
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
                     {v.status === "APPROVED" && !isB && (
                       <div style={{ fontSize: 13, marginTop: 4 }}>
-                        {v.state === "COMPLETED" && v.eligibleViews === null ? (
-                          t("waitingAdmin")
-                        ) : v.state === "COMPLETED" ? (
+                        {v.state === "COMPLETED" ? (
                           <>
                             {t("eligibleViews")}:{" "}
                             <b>{num(v.eligibleViews ?? 0)}</b> · {t("payment")}

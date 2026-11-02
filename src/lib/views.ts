@@ -22,13 +22,7 @@ export async function applyViews(
       where: { id: videoId },
       include: { blogger: { include: { agent: { include: { plan: true } } } } },
     });
-    if (!v || v.status !== "APPROVED") return;
-    if (newViews === v.views) {
-      // same number typed (e.g. 0 = pay nothing): no money changes, but it now counts as entered by the admin
-      if (source === "MANUAL" && !keepEdited && !v.viewsEdited)
-        await tx.video.update({ where: { id: v.id }, data: { viewsEdited: true } });
-      return;
-    }
+    if (!v || v.status !== "APPROVED" || newViews === v.views) return;
     if (source !== "MANUAL" && newViews < v.views) return;
     const platformRate = Number(
       (await tx.rate.findUnique({ where: { platform: v.platform } }))
@@ -95,6 +89,7 @@ export async function resetToLive(videoId: string, actorId?: string) {
 export type FetchResult = "ok" | "closed" | "nodata" | "notapproved";
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 /** One fetch of an approved video. Fetched numbers are ACTUAL views only: they never create earnings.
  *  - Before the 168 hours end: saves the live numbers; the first successful fetch is the STARTING views (baseViews).
  *  - After the 168 hours end (final fetch): saves the final live views (gained = final - starting is shown to the admin) and freezes the video.
@@ -102,6 +97,13 @@ export type FetchResult = "ok" | "closed" | "nodata" | "notapproved";
 =======
 /** Fetch live views / likes / comments of one approved video. Payable views follow live views unless the admin edited them. */
 >>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
+=======
+/** One fetch of an approved video.
+ *  - Before the 168 hours end: saves the live numbers; the first successful fetch is the STARTING views (baseViews). No money is calculated.
+ *  - After the 168 hours end (final fetch): gained views = final views - starting views; earnings are calculated on them and the video is frozen.
+ *    If the admin already typed the views, the typed number is kept. Afterwards the admin can still correct the views manually.
+ *  Set PAY_ONLY_ADJUSTED="true" to never calculate earnings automatically (admin types every number). */
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
 export async function refreshVideo(
   videoId: string,
   source: "AUTO" | "FETCH",
@@ -154,6 +156,7 @@ export async function refreshVideo(
       ...(final ? { finalViews: views, finalAt: now, finalManual: false, frozen: true } : {}),
     },
   });
+<<<<<<< HEAD
 =======
       lastFetchedAt: new Date(),
     },
@@ -162,8 +165,19 @@ export async function refreshVideo(
   if (process.env.PAY_ONLY_ADJUSTED === "false" && !v.viewsEdited)
     await applyViews(videoId, info.views, source, actorId);
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+  let r: FetchResult = "ok";
+  if (final) {
+    if (v.baseViews === null) r = "nobase";
+    else {
+      if (!v.viewsEdited && process.env.PAY_ONLY_ADJUSTED !== "true")
+        await applyViews(videoId, Math.max(0, info.views - v.baseViews), source, actorId); // views gained in the 168 hours
+      r = "final";
+    }
+  }
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
   await recordStat(videoId);
-  return !final ? "ok" : v.baseViews === null ? "nobase" : "final";
+  return r;
 }
 
 <<<<<<< HEAD

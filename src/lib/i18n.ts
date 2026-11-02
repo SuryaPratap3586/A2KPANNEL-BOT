@@ -107,6 +107,7 @@ const EN = {
   payment: "Payment",
   notFinal: "Final after {d}",
   loading: "Loading…",
+<<<<<<< HEAD
   waitingAdmin: "Payable views not entered by admin yet",
   choosePlatform: "Choose platform",
   usernamePh: "Username (e.g. @xyz)",
@@ -119,6 +120,8 @@ const EN = {
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
 =======
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
+=======
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
   totalViews: "Total views (paid on)",
   actualViews: "Actual views (platform)",
   adjustedViews: "Adjusted views (paid on)",
@@ -254,6 +257,7 @@ const HI: typeof EN = {
   payment: "पेमेंट",
   notFinal: "{d} के बाद फाइनल",
   loading: "लोड हो रहा है…",
+<<<<<<< HEAD
   waitingAdmin: "एडमिन ने अभी पेमेंट वाले व्यूज़ दर्ज नहीं किए",
   choosePlatform: "प्लेटफॉर्म चुनें",
   usernamePh: "यूज़रनेम (जैसे @xyz)",
@@ -266,6 +270,8 @@ const HI: typeof EN = {
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
 =======
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
+=======
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
   totalViews: "कुल व्यूज़ (इन पर पेमेंट)",
   actualViews: "असली व्यूज़ (प्लेटफॉर्म)",
   adjustedViews: "एडजस्टेड व्यूज़ (इन पर पेमेंट)",

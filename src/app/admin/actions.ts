@@ -19,7 +19,11 @@ import { creditEligible } from "@/lib/commission";
 import { tgSend } from "@/lib/notify";
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { istDateTime, trackEnd } from "@/lib/week";
+=======
+import { trackEnd } from "@/lib/week";
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
 import { TARGETS, Target, createBroadcast } from "@/lib/broadcast";
 =======
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
@@ -95,13 +99,9 @@ export async function reviewVideo(fd: FormData) {
 }
 
 export async function setViews(fd: FormData) {
-  // manual PAYABLE views (+ optional likes / comments): the only source of the blogger's payment, allowed after the 168 hours
+  // manual views (+ optional likes / comments): payable views = what the blogger is paid on
   const me = await requireStaff();
   const vid = id.parse(fd.get("id"));
-  const cur = await db.video.findUnique({ where: { id: vid }, select: { status: true, trackEndsAt: true } });
-  if (!cur || cur.status !== "APPROVED") back("/admin/videos?status=COMPLETED", "This video is not approved.");
-  if (cur!.trackEndsAt > new Date())
-    back("/admin/videos?status=TRACKING", `Payable views can be entered after the 168 hours are complete (${istDateTime(cur!.trackEndsAt)} IST).`);
   const count = z.coerce.number().int().min(0).max(2_000_000_000);
   const views = count.parse(fd.get("views"));
   const opt = (k: string) => {
@@ -163,11 +163,9 @@ export async function setActualViews(fd: FormData) {
 }
 
 export async function resetToLiveAction(fd: FormData) {
-  // admin chooses to pay on the fetched gained views (final - starting); only after the 168 hours
+  // go back to the live (fetched) views
   const me = await requireStaff();
   const vid = id.parse(fd.get("id"));
-  const cur = await db.video.findUnique({ where: { id: vid }, select: { trackEndsAt: true } });
-  if (!cur || cur.trackEndsAt > new Date()) back("/admin/videos?status=TRACKING", "Payable views can be set only after the 168 hours are complete.");
   await resetToLive(vid, me.id);
   await log(me.email, "VIEWS_USE_LIVE", vid);
   revalidatePath("/admin/videos");
@@ -186,9 +184,13 @@ export async function fetchOneAction(fd: FormData) {
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
     {
 <<<<<<< HEAD
+<<<<<<< HEAD
       ok: "Actual views fetched (information only, no payment).",
+=======
+      ok: "Live views fetched. Money is calculated only at the final fetch, after the 168 hours.",
+>>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
       final:
-        "Final actual views fetched and tracking closed. Now enter the payable views on the Completed tab.",
+        "Final views fetched: gained views and earnings are saved, tracking is closed.",
       nobase:
         "Final views fetched, but the starting views were never fetched, so the gain is unknown. Enter the views manually.",
       closed:
