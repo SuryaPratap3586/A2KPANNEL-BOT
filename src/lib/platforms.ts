@@ -76,8 +76,6 @@ export function normalizeVideoUrl(platform: Platform, raw: string): string | nul
     m = path.match(/^\/share\/([rvp])\/([\w-]+)$/); if (m) return `https://www.facebook.com/share/${m[1]}/${m[2]}/`;
     if (path === "/watch") { const v = u.searchParams.get("v"); return v && /^\d+$/.test(v) ? `https://www.facebook.com/watch/?v=${v}` : null; }
     m = path.match(/^(?:\/[\w.-]+)?\/videos\/(\d+)$/); if (m) return `https://www.facebook.com${path}`;
-    m = path.match(/^(\/[\w.-]+)?\/videos\/[^/]+\/(\d+)$/); if (m) return `https://www.facebook.com${m[1] ?? ""}/videos/${m[2]}`;   // /<page>/videos/<title>/<id> -> same form as above
-    m = path.match(/^\/[\w.-]+\/reels?\/(\d+)$/); if (m) return `https://www.facebook.com/reel/${m[1]}`;                         // /<page>/reel/<id>
     return null;
   }
   for (const k of [...u.searchParams.keys()]) u.searchParams.delete(k);
@@ -89,8 +87,12 @@ export function ownerHint(platform: Platform, raw: string): string | null {
   const u = parse(raw); if (!u) return null;
   const p = u.pathname.replace(/\/+$/, "");
   if (platform === "INSTAGRAM") { const m = p.match(/^\/([\w.]+)\/(?:reel|reels|p|tv)\/[\w-]+$/); return m && !IG_RESERVED.has(m[1].toLowerCase()) ? m[1].toLowerCase() : null; }
+<<<<<<< HEAD
   if (platform === "FACEBOOK") { const m = p.match(/^\/([\w.-]+)\/(?:videos\/(?:[^/]+\/)?|reels?\/)\d+$/); return m && !FB_RESERVED.has(m[1].toLowerCase()) ? m[1].toLowerCase() : null; }
   if (platform === "MOJ") { const m = p.match(/^\/@([\w.-]+)\//); return m ? m[1].toLowerCase() : null; }   // mojapp.in/@user/video/...
+=======
+  if (platform === "FACEBOOK") { const m = p.match(/^\/([\w.-]+)\/videos\/\d+$/); return m ? m[1].toLowerCase() : null; }
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
   return null;
 }
 
@@ -113,7 +115,6 @@ export function parseAccount(platform: Platform, raw: string): { url: string; re
   if (platform === "FACEBOOK") {
     if (segs[0] === "profile.php") { const id = u.searchParams.get("id"); return id && /^\d+$/.test(id) ? { url: `https://www.facebook.com/profile.php?id=${id}`, ref: id } : null; }
     if ((segs[0] === "people" || segs[0] === "pages") && /^\d+$/.test(segs[2] ?? "")) return { url: `https://www.facebook.com/${segs[0]}/${segs[1]}/${segs[2]}`, ref: segs[2] };
-    if (segs[0] === "p" && /-(\d{6,})$/.test(segs[1] ?? "")) return { url: `https://www.facebook.com/p/${segs[1]}/`, ref: segs[1].match(/-(\d{6,})$/)![1] };   // new page links: /p/Page-Name-100064.../
     const s = segs[0]?.toLowerCase();
     if (!s || !/^[a-z0-9.\-]{3,}$/.test(s) || FB_RESERVED.has(s)) return null;
     return { url: `https://www.facebook.com/${s}`, ref: s };

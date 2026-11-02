@@ -1,5 +1,4 @@
 import { db } from "@/lib/db";
-import Btn from "@/app/admin/Btn";
 import { pageSuper } from "@/lib/auth";
 import { getAgentBonus } from "@/lib/settings";
 import { ensurePlans } from "@/lib/plans";
@@ -82,7 +81,7 @@ export default async function Rates({
                       defaultValue={p.bloggerPerMillion.toString()}
                       className="inp w-28"
                     />
-                    <Btn className="btn">Save</Btn>
+                    <button className="btn">Save</button>
                   </form>
                 </td>
               </tr>
@@ -120,7 +119,7 @@ export default async function Rates({
             placeholder="Blogger ₹/1M"
             className="inp w-28"
           />
-          <Btn className="btn">Add plan</Btn>
+          <button className="btn">Add plan</button>
         </form>
       </div>
 
@@ -141,7 +140,7 @@ export default async function Rates({
             defaultValue={need}
             className="inp w-20"
           />
-          <Btn className="btn">Save</Btn>
+          <button className="btn">Save</button>
         </form>
       </div>
 
@@ -161,7 +160,7 @@ export default async function Rates({
             defaultValue={bonus}
             className="inp w-28"
           />
-          <Btn className="btn">Save</Btn>
+          <button className="btn">Save</button>
         </form>
       </div>
 
@@ -189,7 +188,7 @@ export default async function Rates({
               defaultValue={r.perMillion.toString()}
               className="inp w-28"
             />
-            <Btn className="btn">Save</Btn>
+            <button className="btn">Save</button>
           </form>
         ))}
       </div>

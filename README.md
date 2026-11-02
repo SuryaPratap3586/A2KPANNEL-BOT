@@ -28,8 +28,9 @@ Flow: **Admin → Agent bot → (one-time link) → Blogger bot → Admin modera
 - Permissions are checked against the database on every page and action, so deactivating or demoting someone works immediately, even if they are still logged in.
 - Passwords: minimum 12 characters, bcrypt.
 
-## Tracking rules (each video on its own clock)
+## Weekly cycle (IST)
 
+<<<<<<< HEAD
 - Links can be submitted **Monday to Friday** (Mini App or by pasting the link in the blogger bot; the source is saved as "via app" / "via bot").
 - Every video is tracked for **exactly 168 hours from the moment an admin approves it** (approved Monday 10:30 → completes next Monday 10:30; approved Tuesday 16:05 → next Tuesday 16:05).
 - Status: **Pending Approval → Tracking in Progress → 7 Days Completed** (or Rejected). Completion is automatic (it depends only on the clock).
@@ -46,6 +47,11 @@ Flow: **Admin → Agent bot → (one-time link) → Blogger bot → Admin modera
 - Admin → **Broadcast** (super admin only): write a message, pick **All bloggers and agents / All bloggers / All agents / Bloggers of one agent**, the number of recipients is shown, confirm, send.
 - Bloggers get it from the blogger bot, agents from the agent bot (only active users). Sending is done by `npm run bots` (must be running): about 20 messages / second per bot, Telegram 429 "retry after" is respected, temporary errors are retried up to 3 times, users who blocked the bot are marked failed.
 - The history shows sent / failed / waiting per broadcast (live while sending), with **Stop** and **Retry failed**.
+=======
+- Links can be submitted **Monday to Friday**. Views are tracked until **Saturday 11:59 PM** of the submission week, then frozen.
+- Cron: call `GET /api/cron/fetch-views` (header `Authorization: Bearer $CRON_SECRET`) **every night at 23:59 IST**. Each run saves that day's views / likes / comments (the 7-day day-wise table), the Saturday run is the final fetch. The same call deletes day-wise stats and repost records older than **14 days** (videos and earnings are kept, balances never change).
+- **Live views** = fetched from the platform. **Payable views** = what the blogger sees and is paid on. Admin can type payable views on Videos; after that, fetch updates only the live numbers (button **Use live** goes back). In the app the blogger sees payable views, and the **Live views** button shows the actual ones.
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 
 ## Account check
 
@@ -54,8 +60,7 @@ A blogger can only submit videos of his **approved linked accounts**. YouTube: c
 ## APIs
 
 - **YouTube:** official Data API v3 (views, likes, comments, channel).
-- **Instagram / Facebook:** no official public-view API for other people's reels, so data providers are used: Instagram via RapidAPI (`RAPIDAPI_KEY`, `RAPIDAPI_HOST`) or Apify (`APIFY_TOKEN`), Facebook via Apify (`APIFY_TOKEN`). Check each actor's price and output on apify.com, change `APIFY_*_ACTOR` / `APIFY_*_INPUT` if you pick another one. When no data comes back, type the views manually on Videos.
-- **Facebook accounts:** `facebook.com/<page>`, `profile.php?id=…`, `/people/<name>/<id>`, `/pages/<name>/<id>`, `/p/<Page-Name-id>/`. Facebook videos whose owner cannot be matched are accepted as "⚠ unverified" for the admin (set `STRICT_FACEBOOK_OWNER="true"` to reject instead).
+- **Instagram / Facebook:** no official public-view API for other people's reels, so Apify actors are used (`RAPIDAPI_TOKEN`); check each actor's price and output on apify.com, change `RAPIDAPI_*_ACTOR` / `RAPIDAPI_*_INPUT` if you pick another one.
 
 ## Bots
 
@@ -67,10 +72,15 @@ A blogger can only submit videos of his **approved linked accounts**. YouTube: c
 
 - **YouTube:** `watch?v=`, `youtu.be/`, `/shorts/`, `/live/`, `/embed/` → saved as one canonical link (same video can't be submitted twice).
 - **Instagram:** `/reel/`, `/reels/`, `/p/`, `/tv/`, `/<user>/reel/`, new `/share/…` links; tracking params removed.
+<<<<<<< HEAD
 - **Facebook:** `/reel/ID`, `/<page>/reel/ID`, `/share/r|v|p/…`, `/watch/?v=`, `/…/videos/ID`, `/…/videos/<title>/ID`, `fb.watch/…`.
 - **Moj:** `mojapp.in/@user/video/…` (accounts: `mojapp.in/@user`).
 - Bloggers can use **Instagram, YouTube, Moj and Facebook only** (ShareChat, TikTok and Other are no longer accepted; old records stay).
 - **Every submission needs the video link AND the username it was posted from** (YouTube `@xyz`, Instagram `@abc`, …). The username must be one of the blogger's approved accounts on that platform; a link that names its owner must name the same user. In the app Submit is enabled only when platform, username and link are all correct; in the bot send `<link> @username`.
+=======
+- **Facebook:** `/reel/ID`, `/share/r|v|p/…`, `/watch/?v=`, `/…/videos/ID`, `fb.watch/…`.
+- Also ShareChat, Moj, TikTok, Other (https + domain check).
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 - All three now count a view when playback starts (YouTube: Shorts since 31 Mar 2025, all formats from 24 Aug 2026 per reports; Instagram: "Views" replaced Plays/Impressions in Apr 2025; Facebook Page Insights dropped Impressions in Nov 2025). Pay is per "views", so numbers are comparable across platforms.
 - Auto view fetch: **YouTube** with `YOUTUBE_API_KEY`. Instagram/Facebook don't expose public view counts through an official API without the owner's login, so use a data provider in `src/lib/views.ts` or edit views in Admin → Videos.
 - Instagram "repost" feature: reposted videos belong to someone else; reject them in moderation if you don't want them.
@@ -80,8 +90,7 @@ A blogger can only submit videos of his **approved linked accounts**. YouTube: c
 ```bash
 cp .env.example .env        # fill values (openssl rand -base64 48 for secrets)
 npm install
-npm run db:push             # create / update tables (PostgreSQL); run again after every schema change
-npm run db:retrack          # once, after upgrading: running videos -> approval time + 168 hours
+npm run db:push             # create tables (PostgreSQL)
 npm run db:seed             # first admin + rates (800/million) + agent bonus (200)
 npm run dev                 # admin panel -> http://localhost:3000/login
 npm run bots                # starts both Telegram bots (separate process)
@@ -90,7 +99,7 @@ npm run bots                # starts both Telegram bots (separate process)
 1. Create 2 bots in @BotFather; put tokens + blogger bot username in `.env`.
 2. Set `WEBAPP_URL=https://YOUR_DOMAIN/app` (HTTPS required) → "Open App" button + chat menu button appear in both bots.
 3. Admin → Agents → create agent → copy token (shown once) → agent logs in via Agent bot.
-4. Cron (**every hour**): `GET /api/cron/fetch-views` with header `Authorization: Bearer $CRON_SECRET`.
+4. Cron (every few hours): `GET /api/cron/fetch-views` with header `Authorization: Bearer $CRON_SECRET`.
 
 ## Security built in
 

@@ -91,9 +91,10 @@ const EN = {
   dayOf: "Day {d} of 7",
   sevenDone: "7 days completed ✓",
   viewsNote:
-    "A video is tracked for exactly 7 days (168 hours) from the time it is approved. Its views and earnings are counted after the 168 hours are complete.",
+    "A video is tracked for 7 days from the day it is approved. Its views and earnings are counted after the 7 days are complete.",
   submittedOn: "Submitted {d}",
   approvedOn: "Approved {d}",
+<<<<<<< HEAD
   trackStartOn: "Tracking start {d}",
   trackEndOn: "Tracking end {d}",
   viaBot: "via bot",
@@ -116,6 +117,8 @@ const EN = {
   botNeedUser: "Send the video link and the username together, for example:\nhttps://www.instagram.com/reel/ABC123/ @yourname",
 =======
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
   totalViews: "Total views (paid on)",
   actualViews: "Actual views (platform)",
   adjustedViews: "Adjusted views (paid on)",
@@ -129,10 +132,14 @@ const EN = {
   date: "Date",
   closedNote:
 <<<<<<< HEAD
+<<<<<<< HEAD
     "Submit Monday to Friday. Each video is tracked for 168 hours from the time it is approved.",
 =======
     "Submit Monday to Friday. Views are counted until Saturday 11:59 PM.",
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+    "Submit Monday to Friday. Each video is tracked for 7 days from the day it is approved.",
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
   edited: "edited by admin",
   pasteLink:
     "To submit a video send the link and your username together (e.g. https://youtube.com/shorts/... @yourname), or open the app.",
@@ -231,9 +238,10 @@ const HI: typeof EN = {
   dayOf: "दिन {d} / 7",
   sevenDone: "7 दिन पूरे ✓",
   viewsNote:
-    "वीडियो अप्रूव होने के समय से ठीक 7 दिन (168 घंटे) ट्रैक होता है। उसके व्यूज़ और कमाई 168 घंटे पूरे होने के बाद गिनी जाती है।",
+    "वीडियो अप्रूव होने के दिन से 7 दिन गिने जाते हैं। उसके व्यूज़ और कमाई 7 दिन पूरे होने के बाद गिनी जाती है।",
   submittedOn: "सबमिट {d}",
   approvedOn: "अप्रूव {d}",
+<<<<<<< HEAD
   trackStartOn: "ट्रैकिंग शुरू {d}",
   trackEndOn: "ट्रैकिंग खत्म {d}",
   viaBot: "बॉट से",
@@ -256,6 +264,8 @@ const HI: typeof EN = {
   botNeedUser: "वीडियो लिंक और यूज़रनेम एक साथ भेजें, जैसे:\nhttps://www.instagram.com/reel/ABC123/ @yourname",
 =======
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
   totalViews: "कुल व्यूज़ (इन पर पेमेंट)",
   actualViews: "असली व्यूज़ (प्लेटफॉर्म)",
   adjustedViews: "एडजस्टेड व्यूज़ (इन पर पेमेंट)",
@@ -269,10 +279,14 @@ const HI: typeof EN = {
   date: "तारीख",
   closedNote:
 <<<<<<< HEAD
+<<<<<<< HEAD
     "सोमवार से शुक्रवार तक सबमिट करें। हर वीडियो अप्रूव होने के समय से 168 घंटे ट्रैक होता है।",
 =======
     "सोमवार से शुक्रवार तक सबमिट करें। व्यूज़ शनिवार रात 11:59 तक गिने जाते हैं।",
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+    "सोमवार से शुक्रवार तक सबमिट करें। हर वीडियो के 7 दिन अप्रूव होने के दिन से गिने जाते हैं।",
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
   edited: "एडमिन ने बदला",
   pasteLink:
     "वीडियो सबमिट करने के लिए लिंक और यूज़रनेम एक साथ भेजें (जैसे https://youtube.com/shorts/... @yourname), या ऐप खोलें।",

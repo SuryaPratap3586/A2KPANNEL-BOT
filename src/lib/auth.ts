@@ -1,7 +1,6 @@
 import { NextAuthOptions, getServerSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { redirect } from "next/navigation";
-import { cache } from "react";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "./db";
@@ -37,15 +36,14 @@ export const authOptions: NextAuthOptions = {
 
 export type Staff = { id: string; email: string; name: string; role: "SUPER" | "ADMIN" };
 
-/** Always re-reads the admin from the DB: deactivating or demoting someone takes effect immediately, even with a valid session.
- *  cache(): layout + page of the same request share ONE lookup instead of one each. */
-const current = cache(async (): Promise<Staff | null> => {
+/** Always re-reads the admin from the DB: deactivating or demoting someone takes effect immediately, even with a valid session. */
+async function current(): Promise<Staff | null> {
   const s = await getServerSession(authOptions);
   const id = (s?.user as any)?.id as string | undefined;
   if (!id) return null;
   const a = await db.admin.findUnique({ where: { id } });
   return a && a.active ? { id: a.id, email: a.email, name: a.name, role: a.role } : null;
-});
+}
 export async function requireStaff(): Promise<Staff> { const a = await current(); if (!a) throw new Error("Unauthorized"); return a; }
 export async function requireSuper(): Promise<Staff> { const a = await requireStaff(); if (a.role !== "SUPER") throw new Error("Forbidden"); return a; }
 // For pages (redirect instead of throwing)

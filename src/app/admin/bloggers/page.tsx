@@ -1,7 +1,6 @@
 import { db } from "@/lib/db";
-import Btn from "@/app/admin/Btn";
 import { pageSuper } from "@/lib/auth";
-import { bloggerBalances } from "@/lib/balance";
+import { bloggerBalance } from "@/lib/balance";
 import {
   assignAgent,
   setBloggerBonus,
@@ -29,7 +28,7 @@ export default async function Bloggers() {
   ]);
   const ids = list.map((b) => b.id);
   const [bal, appr, all] = await Promise.all([
-    bloggerBalances(ids), // 3 queries for the whole list
+    Promise.all(list.map((b) => bloggerBalance(b.id))),
     db.video.groupBy({
       by: ["bloggerId"],
       where: { bloggerId: { in: ids }, status: "APPROVED" },
@@ -68,7 +67,7 @@ export default async function Bloggers() {
             </tr>
           </thead>
           <tbody>
-            {list.map((b) => {
+            {list.map((b, i) => {
               const a = appr.find((x) => x.bloggerId === b.id);
               const t = all.find((x) => x.bloggerId === b.id);
               return (
@@ -99,7 +98,7 @@ export default async function Bloggers() {
                           </option>
                         ))}
                       </select>
-                      <Btn className="btn">Set</Btn>
+                      <button className="btn">Set</button>
                     </form>
                   </td>
                   <td>
@@ -133,7 +132,7 @@ export default async function Bloggers() {
                         defaultValue={b.agentBonus.toString()}
                         className="inp w-20"
                       />
-                      <Btn className="btn">Save</Btn>
+                      <button className="btn">Save</button>
                     </form>
                   </td>
                   <td>
@@ -145,10 +144,10 @@ export default async function Bloggers() {
                         placeholder="https://..."
                         className="inp w-48"
                       />
-                      <Btn className="btn">Save</Btn>
+                      <button className="btn">Save</button>
                     </form>
                   </td>
-                  <td>{(bal.get(b.id) ?? 0).toFixed(2)}</td>
+                  <td>{bal[i].toFixed(2)}</td>
                   <td>
                     <AdjustForm kind="blogger" id={b.id} />
                   </td>
@@ -161,11 +160,11 @@ export default async function Bloggers() {
                           <form key={s} action={setBloggerStatus}>
                             <input type="hidden" name="id" value={b.id} />
                             <input type="hidden" name="status" value={s} />
-                            <Btn
+                            <button
                               className={s === "ACTIVE" ? "btn-g" : "btn-r"}
                             >
                               {s}
-                            </Btn>
+                            </button>
                           </form>
                         ))}
                     </div>

@@ -131,6 +131,7 @@ export function bloggerBot(token: string) {
       if (!m) return ctx.reply(tr(l, "pasteLink"), menu(l));
       const platform = detectPlatform(m[0]);
       if (!platform) return ctx.reply("❌ " + tr(l, "e_badUrl"));
+<<<<<<< HEAD
       if (!isBloggerPlatform(platform))
         return ctx.reply("❌ " + tr(l, "e_platform"));
       const u = ctx.message.text.replace(m[0], " ").match(/@([\w.-]{2,50})/); // the username, written next to the link
@@ -142,6 +143,9 @@ export function bloggerBot(token: string) {
         m[0],
         "BOT",
       );
+=======
+      const r = await submitVideo(blogger.id, platform, m[0]);
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
       if ("error" in r) return ctx.reply("❌ " + tr(l, r.error));
       await ctx.reply(
         "✅ " + tr(l, r.unverified ? "unverifiedNote" : "submitted"),

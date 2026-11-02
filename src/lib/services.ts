@@ -13,6 +13,7 @@ import {
 } from "./platforms";
 import { getVideoInfo } from "./providers";
 <<<<<<< HEAD
+<<<<<<< HEAD
 import {
   submissionOpen,
   trackDay,
@@ -23,6 +24,9 @@ import {
 =======
 import { submissionOpen, weekStartIST } from "./week";
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+import { submissionOpen, trackDay, trackEnd, weekStartIST } from "./week";
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 import { randomToken } from "./security";
 import { creditEligible } from "./commission";
 
@@ -201,7 +205,6 @@ export async function submitVideo(
   platform: Platform,
   raw: string,
   only?: SocialAccount | null,
-  via: "APP" | "BOT" = "APP",
 ): Promise<{ ok: true; unverified: boolean } | Err> {
   if (!isBloggerPlatform(platform)) return { error: "e_platform" }; // Instagram, YouTube, Moj, Facebook only
   if (!submissionOpen()) return { error: "e_closed" };
@@ -252,10 +255,14 @@ export async function submitVideo(
         ownerVerified: verified,
         weekStart: weekStartIST(),
 <<<<<<< HEAD
+<<<<<<< HEAD
         trackEndsAt: trackEnd(), // placeholder: replaced by approval time + 168 h when the admin approves
         submittedVia: via,
 =======
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+        trackEndsAt: trackEnd(),
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
       },
     });
     return { ok: true, unverified: !verified };
@@ -375,6 +382,7 @@ export async function requestWithdrawal(
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 /** Timeline of one video (ISO timestamps; the app shows them in IST). Tracking = approval timestamp + exactly 168 hours. */
 const timeline = (
   v: {
@@ -401,6 +409,10 @@ const timeline = (
 };
 =======
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+const istDate = (d: Date) =>
+  new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 const payRow = (w: any) => ({
   id: w.id,
   amount: num(w.amount),
@@ -491,9 +503,17 @@ export async function bloggerData(id: string) {
       status: v.status,
       reason: v.rejectReason,
 <<<<<<< HEAD
+<<<<<<< HEAD
       ...timeline(v, now),
 =======
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+      day: trackDay(v.trackEndsAt, now),
+      done: v.trackEndsAt <= now,
+      submittedAt: istDate(v.createdAt),
+      approvedAt:
+        v.status === "APPROVED" && v.reviewedAt ? istDate(v.reviewedAt) : null,
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
     })),
     reposts: reposts.map((r) => ({
       id: r.id,
@@ -511,7 +531,6 @@ export async function agentData(id: string) {
     include: { plan: true },
   });
   const mine = { blogger: { agentId: id } };
-  const now = new Date();
   const [bloggers, videos, pays, balance, bonusAgg] = await Promise.all([
     db.blogger.findMany({
       where: { agentId: id, status: { not: "DELETED" } },
@@ -562,8 +581,9 @@ export async function agentData(id: string) {
       platform: v.platform,
       url: v.url,
       status: v.status,
-      reason: v.rejectReason,
+      views: v.views,
       blogger: v.blogger.name,
+<<<<<<< HEAD
       ...timeline(v, now),
       // Final (eligible) views and payment exist only after the 168 hours AND after the admin entered the payable views
       eligibleViews:
@@ -572,6 +592,8 @@ export async function agentData(id: string) {
         trackState(v, now) === "COMPLETED" && v.viewsEdited
           ? num(v.earnings)
           : null,
+=======
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
     })),
     payments: pays.map(payRow),
   };

@@ -6,7 +6,6 @@ import { db } from "../src/lib/db";
 import { agentBot } from "./agentBot";
 import { bloggerBot } from "./bloggerBot";
 import { WEBAPP_URL } from "./common";
-import { startBroadcastWorker } from "../src/lib/broadcast";
 
 // Some Windows / Wi-Fi networks reset IPv6 connections to Telegram (ECONNRESET). Prefer IPv4 everywhere.
 dns.setDefaultResultOrder("ipv4first");
@@ -87,7 +86,6 @@ async function run(name: string, make: () => Telegraf) {
 
 run("Agent", () => agentBot(a));
 run("Blogger", () => bloggerBot(b));
-startBroadcastWorker({ BLOGGER: b, AGENT: a }); // sends Admin Panel broadcasts (checks every 3 s)
 const stop = (sig: string) =>
   running.forEach((x) => {
     try {

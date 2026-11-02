@@ -1,5 +1,4 @@
 import { db } from "@/lib/db";
-import Btn from "@/app/admin/Btn";
 import { pageSuper } from "@/lib/auth";
 import { reviewAccount } from "../actions";
 import PlanBadge from "../PlanBadge";
@@ -12,7 +11,7 @@ function Review({ id, status }: { id: string; status: string }) {
         <form action={reviewAccount}>
           <input type="hidden" name="id" value={id} />
           <input type="hidden" name="decision" value="APPROVED" />
-          <Btn className="btn-g">Approve</Btn>
+          <button className="btn-g">Approve</button>
         </form>
       )}
       {status !== "REJECTED" && (
@@ -27,7 +26,7 @@ function Review({ id, status }: { id: string; status: string }) {
             placeholder="Reason (pick or write)"
             className="inp w-44"
           />
-          <Btn className="btn-r">Reject</Btn>
+          <button className="btn-r">Reject</button>
         </form>
       )}
     </div>

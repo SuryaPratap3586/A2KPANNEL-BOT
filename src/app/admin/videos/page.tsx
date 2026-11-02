@@ -1,13 +1,16 @@
 <<<<<<< HEAD
 import type { Prisma } from "@prisma/client";
-import Btn from "@/app/admin/Btn";
 import { db } from "@/lib/db";
 import { pageStaff } from "@/lib/auth";
+<<<<<<< HEAD
 import { istDateTime, trackState } from "@/lib/week";
 =======
 import { db } from "@/lib/db";
 import { pageStaff } from "@/lib/auth";
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+import { trackDay } from "@/lib/week";
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 import PlanBadge from "../PlanBadge";
 import { reviewVideo, fetchAllAction } from "../actions";
 import VideoCard from "./VideoCard";
@@ -46,6 +49,7 @@ const REASONS = [
   "Account not linked",
 ];
 const fmt = (n: number) => n.toLocaleString("en-IN");
+<<<<<<< HEAD
 <<<<<<< HEAD
 const STATE: Record<string, [string, string]> = {
   PENDING_APPROVAL: ["Pending Approval", "text-amber-700"],
@@ -87,6 +91,21 @@ function Timeline({ v, now }: { v: TimelineV; now: Date }) {
 }
 =======
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+const istDate = (d: Date) =>
+  new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
+const istTime = (d: Date) =>
+  d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+const gained = (v: { liveViews: number; baseViews: number | null }) =>
+  Math.max(0, v.liveViews - (v.baseViews ?? v.liveViews)); // views gained since approval
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 
 // Visible to every admin: all bloggers' videos, approve/reject with reason, fetch views (auto) or type views (manual).
 export default async function Videos({
@@ -196,8 +215,15 @@ export default async function Videos({
         </details>
       )}
       {tab === "TRACKING" && (
+<<<<<<< HEAD
         <form action={fetchAllAction} className="flex flex-wrap items-center gap-2">
           <Btn className="btn">Run due fetches now</Btn>
+=======
+        <form action={fetchAllAction}>
+          <button className="btn">
+            Fetch views for all running videos (auto)
+          </button>{" "}
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
           <span className="text-xs text-slate-500">
             Fetches missing initial views and the 7-day views of videos whose
             168 hours are over (the hourly cron does the same).
@@ -247,7 +273,17 @@ export default async function Videos({
                     <th>Likes</th>
                     <th>Comments</th>
                     <th>Adjusted views (paid on)</th>
+<<<<<<< HEAD
                     {me.role === "SUPER" && <th>Earned ₹</th>}
+=======
+                    {me.role === "SUPER" && (
+                      <th>
+                        {tab === "TRACKING"
+                          ? "Earned so far ₹ (not paid yet)"
+                          : "Earned ₹ (counted)"}
+                      </th>
+                    )}
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
                     <th>Update</th>
                   </>
                 )}
@@ -272,9 +308,25 @@ export default async function Videos({
                       {v.url.slice(0, 60)}
                     </div>
 <<<<<<< HEAD
+<<<<<<< HEAD
                     <Timeline v={v} now={now} />
 =======
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+                    <div className="text-xs text-slate-500">
+                      submitted {istTime(v.createdAt)}
+                    </div>
+                    {v.status === "APPROVED" && v.reviewedAt && (
+                      <div className="text-xs text-slate-500">
+                        approved {istTime(v.reviewedAt)}
+                      </div>
+                    )}
+                    {v.status === "REJECTED" && v.reviewedAt && (
+                      <div className="text-xs text-slate-500">
+                        rejected {istTime(v.reviewedAt)}
+                      </div>
+                    )}
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
                     {owner(v)}
                   </td>
                   {tab === "PENDING" ? (
@@ -282,7 +334,7 @@ export default async function Videos({
                       <form action={reviewVideo}>
                         <input type="hidden" name="id" value={v.id} />
                         <input type="hidden" name="decision" value="APPROVED" />
-                        <Btn className="btn-g">Approve</Btn>
+                        <button className="btn-g">Approve</button>
                       </form>
                       <form action={reviewVideo} className="flex flex-wrap gap-1">
                         <input type="hidden" name="id" value={v.id} />
@@ -295,7 +347,7 @@ export default async function Videos({
                           placeholder="Reason (pick or write)"
                           className="inp w-44"
                         />
-                        <Btn className="btn-r">Reject</Btn>
+                        <button className="btn-r">Reject</button>
                       </form>
                     </td>
 <<<<<<< HEAD
@@ -306,7 +358,40 @@ export default async function Videos({
                   {tab !== "PENDING" && <td>{v.reviewedBy?.name ?? "—"}</td>}
                   {tab === "APPROVED" && (
                     <>
+<<<<<<< HEAD
                       <td>{fmt(v.liveViews)}</td>
+=======
+                      <td>
+                        {tab === "TRACKING" ? (
+                          <>
+                            <b>Day {trackDay(v.trackEndsAt, now)} of 7</b>
+                            <div className="text-xs text-slate-500">
+                              from {istDate(v.reviewedAt ?? v.createdAt)} to{" "}
+                              {istDate(v.trackEndsAt)}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <b className="text-green-700">7 days completed ✓</b>
+                            <div className="text-xs text-slate-500">
+                              on {istDate(v.trackEndsAt)}
+                            </div>
+                          </>
+                        )}
+                      </td>
+                      <td>
+                        <b>{fmt(v.liveViews)}</b>
+                        <div className="text-xs text-slate-500">
+                          at approval:{" "}
+                          {v.baseViews === null
+                            ? "not fetched yet"
+                            : fmt(v.baseViews)}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          gained in the 7 days: <b>{fmt(gained(v))}</b>
+                        </div>
+                      </td>
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
                       <td>{fmt(v.likes)}</td>
                       <td>{fmt(v.comments)}</td>
                       <td>

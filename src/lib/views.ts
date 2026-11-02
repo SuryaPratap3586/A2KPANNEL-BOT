@@ -163,6 +163,7 @@ export async function refreshVideo(
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 const HOUR = 3600_000;
 
 /** Run EVERY HOUR. Each approved video is fetched only twice:
@@ -173,6 +174,10 @@ const HOUR = 3600_000;
 =======
 /** Run every night ~23:59 IST (also fine to run more often).
  *  - Each approved video is tracked until Saturday 23:59 IST of its submission week, then frozen.
+=======
+/** Run every night ~23:59 IST (also fine to run more often).
+ *  - Each approved video is tracked for ITS OWN 7 days (day 1 = the day it was APPROVED, day 7 ends 23:59 IST), then frozen.
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
  *  - Last 15 minutes before that = final fetch. Videos approved after the week ended get one catch-up fetch.
  *  - Works inside a time budget so serverless hosts do not time out; call again to continue. */
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
@@ -206,8 +211,12 @@ export async function fetchAll(actorId?: string, budgetMs = 45_000) {
       continue;
     }
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     const end = weekEnd(v.weekStart),
+=======
+    const end = v.trackEndsAt,
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
       finalFrom = new Date(end.getTime() - 15 * 60_000);
     const inFinal = now >= finalFrom;
     if (inFinal && v.lastFetchedAt && v.lastFetchedAt >= finalFrom) {

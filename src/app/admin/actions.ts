@@ -18,10 +18,14 @@ import { agentBalance } from "@/lib/balance";
 import { creditEligible } from "@/lib/commission";
 import { tgSend } from "@/lib/notify";
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { istDateTime, trackEnd } from "@/lib/week";
 import { TARGETS, Target, createBroadcast } from "@/lib/broadcast";
 =======
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+import { trackEnd } from "@/lib/week";
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 
 const id = z.string().cuid();
 const pw = z
@@ -46,7 +50,6 @@ export async function reviewVideo(fd: FormData) {
       ? z.string().trim().min(2).max(200).parse(fd.get("reason"))
       : null;
   // only pending videos can be reviewed, so counts per admin stay honest
-  const now = new Date(); // approval timestamp = start of this video's own 168-hour tracking window
   const u = await db.video.updateMany({
     where: { id: vid, status: "PENDING" },
     data: {
@@ -54,32 +57,39 @@ export async function reviewVideo(fd: FormData) {
       rejectReason: reason,
       reviewedById: me.id,
 <<<<<<< HEAD
+<<<<<<< HEAD
       reviewedAt: now,
       ...(decision === "APPROVED" ? { trackEndsAt: trackEnd(now) } : {}),
 =======
       reviewedAt: new Date(),
 >>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
+=======
+      reviewedAt: new Date(),
+      ...(decision === "APPROVED" ? { trackEndsAt: trackEnd() } : {}),
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
     },
-  });
+  }); // the 7 days start on the approval day
   if (u.count === 1) {
     const v = await db.video.findUniqueOrThrow({
       where: { id: vid },
       include: { blogger: true },
     });
     await log(me.email, "VIDEO_" + decision, vid);
-    // Slow work runs in the background so the button answers at once:
-    // Telegram message, agent bonus check, first view fetch (= starting point of the 168 hours; the hourly cron retries if it fails)
-    void tgSend(
+    if (decision === "APPROVED")
+      await creditEligible({ bloggerId: v.bloggerId }); // agent bonus is credited once the blogger qualifies
+    await tgSend(
       process.env.BLOGGER_BOT_TOKEN,
       v.blogger.telegramId,
       decision === "APPROVED"
-        ? `✅ Your video was approved:\n${v.url}\nViews are tracked for 7 days (168 hours) from now.`
+        ? `✅ Your video was approved:\n${v.url}`
         : `❌ Your video was rejected (${reason}):\n${v.url}`,
     );
-    if (decision === "APPROVED") {
-      creditEligible({ bloggerId: v.bloggerId }).catch(() => {});
-      refreshVideo(vid, "AUTO").catch(() => {});
-    }
+    // Right after approval fetch the actual views (YouTube is quick; slower providers finish later or on the nightly cron)
+    if (decision === "APPROVED")
+      await Promise.race([
+        refreshVideo(vid, "AUTO").catch(() => null),
+        new Promise((r) => setTimeout(r, 8000)),
+      ]);
   }
   revalidatePath("/admin/videos");
 }
@@ -181,7 +191,11 @@ export async function fetchOneAction(fd: FormData) {
       nobase:
         "Final views fetched, but the starting views were never fetched, so the gain is unknown. Enter the views manually.",
       closed:
+<<<<<<< HEAD
         "Tracking is closed for this video (final views already saved). Correct the views manually if needed.",
+=======
+        "Tracking is closed for this video (its week ended Saturday 11:59 PM).",
+>>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
       nodata:
         "Fetching failed: the reason is shown under the video (Fetch status). You can enter the views manually.",
       notapproved: "This video is not approved.",
@@ -431,7 +445,7 @@ export async function reviewAccount(fd: FormData) {
   });
   await log(me.email, "ACCOUNT_" + status, aid);
   if (status === "APPROVED") await creditEligible({ bloggerId: acc.bloggerId });
-  void tgSend(
+  await tgSend(
     process.env.BLOGGER_BOT_TOKEN,
     acc.blogger.telegramId,
     status === "APPROVED"
@@ -466,7 +480,7 @@ export async function setPayment(fd: FormData) {
     REJECTED: "Rejected",
   }[status];
   if (to?.telegramId)
-    void tgSend(
+    await tgSend(
       w.blogger ? process.env.BLOGGER_BOT_TOKEN : process.env.AGENT_BOT_TOKEN,
       to.telegramId,
       `💸 Payment ₹${w.amount}: ${label}${note ? " (" + note + ")" : ""}`,
@@ -681,7 +695,7 @@ export async function createAgentPayout(fd: FormData) {
   });
   await log(me.email, "AGENT_WEEKLY_PAYOUT", `${agentId} ${due}`);
   if (a!.telegramId)
-    void tgSend(
+    await tgSend(
       process.env.AGENT_BOT_TOKEN,
       a!.telegramId,
       `💸 Your weekly payment of ₹${due} is being processed.`,
@@ -716,47 +730,10 @@ export async function setBloggerLink(fd: FormData) {
   });
   await log(me.email, "BLOGGER_LINK_SET", `${bid} -> ${link ?? "removed"}`);
   if (link)
-    void tgSend(
+    await tgSend(
       process.env.BLOGGER_BOT_TOKEN,
       b.telegramId,
       `🔗 Add this link in your social media account:\n${link}`,
     );
   revalidatePath("/admin/bloggers");
-}
-
-// Broadcast (super admin only): the message is queued and the bots process sends it (rate limited, with retries)
-export async function sendBroadcast(fd: FormData) {
-  const me = await requireSuper();
-  const message = z.string().trim().min(2, "Write a message first.").max(4000, "Telegram allows max 4000 characters.").safeParse(fd.get("message"));
-  if (!message.success) back("/admin/broadcast", message.error.issues[0].message);
-  const target = z.enum(Object.keys(TARGETS) as [Target, ...Target[]]).parse(fd.get("target"));
-  const rawAgent = String(fd.get("agentId") ?? "");
-  const agentId = target === "AGENT_BLOGGERS" ? id.parse(rawAgent) : null;
-  const b = await createBroadcast(message.data!, target, agentId, me.email);
-  await log(me.email, "BROADCAST", `${b.id} target=${target}${agentId ? ":" + agentId : ""} recipients=${b.total}`);
-  back("/admin/broadcast", b.total ? `Broadcast queued for ${b.total} recipient(s). Delivery progress is shown below.` : "No recipients for this target. Nothing was sent.");
-}
-
-export async function cancelBroadcast(fd: FormData) {
-  const me = await requireSuper();
-  const bid = id.parse(fd.get("id"));
-  await db.$transaction([
-    db.broadcast.updateMany({ where: { id: bid, state: "SENDING" }, data: { state: "CANCELLED", finishedAt: new Date() } }),
-    db.broadcastDelivery.updateMany({ where: { broadcastId: bid, status: "PENDING" }, data: { status: "FAILED", error: "cancelled by admin" } }),
-  ]);
-  await log(me.email, "BROADCAST_CANCEL", bid);
-  back("/admin/broadcast", "Broadcast stopped. Messages already sent cannot be taken back.");
-}
-
-export async function retryBroadcast(fd: FormData) {
-  // re-sends failed messages, except users who blocked the bot (403)
-  const me = await requireSuper();
-  const bid = id.parse(fd.get("id"));
-  const r = await db.broadcastDelivery.updateMany({
-    where: { broadcastId: bid, status: "FAILED", NOT: { error: { startsWith: "403" } } },
-    data: { status: "PENDING", attempts: 0, nextTryAt: new Date(), error: null },
-  });
-  if (r.count) await db.broadcast.update({ where: { id: bid }, data: { state: "SENDING", finishedAt: null } });
-  await log(me.email, "BROADCAST_RETRY", `${bid} ${r.count}`);
-  back("/admin/broadcast", r.count ? `${r.count} failed message(s) queued again.` : "Nothing to retry (users who blocked the bot are not retried).");
 }
