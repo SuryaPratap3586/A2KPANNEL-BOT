@@ -1,17 +1,123 @@
 "use client";
 import Script from "next/script";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Lang, tr, Key, DICT } from "@/lib/i18n";
+import { istDateTime } from "@/lib/week";
+import {
+  BLOGGER_PLATFORMS,
+  accountHasUsername,
+  cleanUsername,
+  normalizeVideoUrl,
+  ownerHint,
+} from "@/lib/platforms";
 
-const PLATFORMS = [
-  "INSTAGRAM",
-  "FACEBOOK",
-  "YOUTUBE",
-  "SHARECHAT",
-  "MOJ",
-  "TIKTOK",
-  "OTHER",
-];
+// Bloggers can use these platforms only
+const PLATFORMS = BLOGGER_PLATFORMS;
+const PNAME: Record<string, string> = {
+  INSTAGRAM: "Instagram",
+  YOUTUBE: "YouTube",
+  MOJ: "Moj",
+  FACEBOOK: "Facebook",
+};
+type T = (k: Key, v?: Record<string, string | number>) => string;
+
+/** Video submission: platform + username (@xyz) + video link are all required and checked while typing
+ *  (same rules as the server). Submit is enabled only when everything is correct. */
+function SubmitVideo({
+  d,
+  t,
+  act,
+  inp,
+  btn,
+}: {
+  d: any;
+  t: T;
+  act: (body: Record<string, unknown>, ok?: Key) => Promise<boolean>;
+  inp: React.CSSProperties;
+  btn: React.CSSProperties;
+}) {
+  const [platform, setPlatform] = useState("");
+  const [user, setUser] = useState("");
+  const [url, setUrl] = useState("");
+  const approved = d.accounts.filter(
+    (a: any) => a.status === "APPROVED" && a.platform === platform,
+  );
+  const hasAccount = !platform || approved.length > 0;
+  const clean = cleanUsername(user);
+  const userOk =
+    !!clean && approved.some((a: any) => accountHasUsername(a, clean));
+  const canon = platform ? normalizeVideoUrl(platform as any, url) : null;
+  const owner = canon ? ownerHint(platform as any, url) : null;
+  const linkOk = !!canon && (!owner || !clean || owner === clean);
+  const ready = d.submitOpen && !!platform && hasAccount && userOk && linkOk;
+  const hint = (s: string) => (
+    <div style={{ fontSize: 12, color: "#c53030", margin: "-2px 0 6px" }}>
+      {s}
+    </div>
+  );
+  return (
+    <>
+      <select
+        style={inp}
+        value={platform}
+        onChange={(e) => setPlatform(e.target.value)}
+        required
+      >
+        <option value="" disabled>
+          {t("choosePlatform")} *
+        </option>
+        {PLATFORMS.map((p) => (
+          <option key={p} value={p}>
+            {PNAME[p]}
+          </option>
+        ))}
+      </select>
+      {platform && !hasAccount && hint(t("needAccountFor", { p: PNAME[platform] }))}
+      <input
+        style={inp}
+        value={user}
+        onChange={(e) => setUser(e.target.value)}
+        placeholder={t("usernamePh") + " *"}
+        list="myusers"
+        autoCapitalize="none"
+        autoCorrect="off"
+        required
+      />
+      <datalist id="myusers">
+        {approved.map((a: any) => (
+          <option key={a.id} value={a.label.startsWith("@") ? a.label : "@" + a.label} />
+        ))}
+      </datalist>
+      {user && !clean && hint(t("e_needUser"))}
+      {platform && hasAccount && clean && !userOk && hint(t("e_userNotLinked"))}
+      <input
+        style={inp}
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        placeholder={t("link") + " *"}
+        inputMode="url"
+        autoCapitalize="none"
+        required
+      />
+      {url && platform && !canon && hint(t("e_badUrl"))}
+      {canon && !linkOk && hint(t("e_notLinked"))}
+      <button
+        style={{ ...btn, opacity: ready ? 1 : 0.45 }}
+        disabled={!ready}
+        onClick={async () => {
+          if (!ready) return;
+          const ok = await act(
+            { action: "submitVideo", platform, username: user, url },
+            "submitted",
+          );
+          if (ok) setUrl(""); // keep platform + username for the next video
+        }}
+      >
+        {t("submit")}
+      </button>
+    </>
+  );
+}
 const tr_keys = DICT.EN;
 const inr = (n: number) =>
   "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -22,7 +128,54 @@ const TONE: Record<string, string> = {
   PAID: "#2f855a",
   APPROVED: "#2f855a",
   REJECTED: "#c53030",
+  PENDING_APPROVAL: "#b7791f",
+  TRACKING: "#2b6cb0",
+  COMPLETED: "#2f855a",
 };
+
+type Step = { label: string; date: string; color: string; done: boolean } | null;
+/** Vertical timeline: a colored dot and a colored date label per step, joined by a line. Steps not reached yet are hollow. */
+function Timeline({ steps }: { steps: Step[] }) {
+  const s = steps.filter(Boolean) as Exclude<Step, null>[];
+  return (
+    <div style={{ marginTop: 6 }}>
+      {s.map((x, i) => (
+        <div key={i} style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                marginTop: 3,
+                borderRadius: 99,
+                border: `2px solid ${x.color}`,
+                background: x.done ? x.color : "transparent",
+              }}
+            />
+            {i < s.length - 1 && (
+              <span style={{ flex: 1, width: 2, minHeight: 12, background: x.color, opacity: 0.35 }} />
+            )}
+          </div>
+          <div style={{ paddingBottom: i < s.length - 1 ? 6 : 0, fontSize: 12 }}>
+            <span
+              style={{
+                display: "inline-block",
+                padding: "1px 8px",
+                borderRadius: 99,
+                background: x.color + "22",
+                color: x.color,
+                fontWeight: 600,
+              }}
+            >
+              {x.label}
+            </span>{" "}
+            <span style={{ opacity: 0.85 }}>{x.date}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // Telegram Mini App ("Open App"): everything for Agent and Blogger lives here.
 export default function MiniApp() {
@@ -31,10 +184,20 @@ export default function MiniApp() {
   const [msg, setMsg] = useState("");
   const [link, setLink] = useState("");
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false); // a request is running: buttons are disabled (no double taps) and "Loading…" is shown
+  const last = useRef(0); // time of the last fresh data: switching tabs within 30 s reuses it instead of asking the server again
   const lang: Lang = d?.lang ?? "EN";
   const t = (k: Key, v?: Record<string, string | number>) => tr(lang, k, v);
 
   async function call(body: Record<string, unknown>) {
+    setBusy(true);
+    try {
+      return await request(body);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function request(body: Record<string, unknown>) {
     const tg = (window as any).Telegram?.WebApp;
     const r = await fetch("/api/webapp", {
       method: "POST",
@@ -59,12 +222,15 @@ export default function MiniApp() {
       return false;
     }
     setD(j.data);
+    last.current = Date.now();
     if (j.link) setLink(j.link.url);
     return true;
   }
   const act = async (body: Record<string, unknown>, ok: Key = "done") => {
     setMsg("");
-    if (await call(body)) setMsg("✅ " + t(ok));
+    const good = await call(body);
+    if (good) setMsg("✅ " + t(ok));
+    return good;
   };
   const boot = () => {
     const tg = (window as any).Telegram?.WebApp;
@@ -156,8 +322,12 @@ export default function MiniApp() {
         onReady={boot}
       />
       {err && <p style={{ color: "#c53030" }}>{err}</p>}
+      {!d && !err && <p style={{ opacity: 0.6 }}>⏳ {t("loading")}</p>}
       {d && (
-        <>
+        <fieldset
+          disabled={busy}
+          style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+        >
           <div style={{ ...box, background: "#14213d", color: "#fff" }}>
             <div style={{ opacity: 0.7, fontSize: 12 }}>
               {t(isB ? "role_blogger" : "role_agent")}
@@ -168,6 +338,7 @@ export default function MiniApp() {
             </div>
             <div style={{ opacity: 0.7, fontSize: 12 }}>{t("balance")}</div>
           </div>
+          {busy && <p style={{ opacity: 0.7 }}>⏳ {t("loading")}</p>}
           {msg && <p>{msg}</p>}
 
           {tab === "home" && isB && <LinkCard />}
@@ -178,8 +349,10 @@ export default function MiniApp() {
                   <Row k={t("totalViews")} v={num(d.views)} />
                   <Row k={t("pending")} v={d.counts.pending} />
                   <Row k={t("approved")} v={d.counts.approved} />
+                  <Row k={t("completedVideos")} v={d.counts.completed} />
                   <Row k={t("rejected")} v={d.counts.rejected} />
                   <Row k={t("yourAgent")} v={d.agent ?? t("noAgent")} />
+                  <p style={{ opacity: 0.7, fontSize: 12 }}>{t("viewsNote")}</p>
                   <p style={{ opacity: 0.7, fontSize: 12 }}>
                     {t("closedNote")}
                   </p>
@@ -204,46 +377,7 @@ export default function MiniApp() {
                     {d.submitOpen ? t("closedNote") : "🔒 " + t("e_closed")}
                   </p>
                   {d.accounts.some((a: any) => a.status === "APPROVED") ? (
-                    <>
-                      <select id="vacc" style={inp}>
-                        {d.accounts
-                          .filter((a: any) => a.status === "APPROVED")
-                          .map((a: any) => (
-                            <option key={a.id} value={a.id}>
-                              {a.platform} · {a.label}
-                            </option>
-                          ))}
-                      </select>
-                      <input
-                        id="vu"
-                        style={inp}
-                        placeholder={t("link")}
-                        inputMode="url"
-                      />
-                      <button
-                        style={btn}
-                        onClick={() => {
-                          const u = document.getElementById(
-                            "vu",
-                          ) as HTMLInputElement;
-                          act(
-                            {
-                              action: "submitVideo",
-                              accountId: (
-                                document.getElementById(
-                                  "vacc",
-                                ) as HTMLSelectElement
-                              ).value,
-                              url: u.value,
-                            },
-                            "submitted",
-                          );
-                          u.value = "";
-                        }}
-                      >
-                        {t("submit")}
-                      </button>
-                    </>
+                    <SubmitVideo d={d} t={t} act={act} inp={inp} btn={btn} />
                   ) : (
                     <p style={{ margin: 0 }}>{t("e_needAccount")}</p>
                   )}
@@ -273,9 +407,54 @@ export default function MiniApp() {
                     >
                       {v.url}
                     </div>
+                    {/* Timeline (IST): submitted -> approved -> 7 days end (= approval + 168 hours) */}
+                    <div style={{ fontSize: 12, marginTop: 4 }}>
+                      <b style={{ color: TONE[v.state] }}>
+                        {t(("ts_" + v.state) as Key)}
+                      </b>
+                      {v.state === "TRACKING"
+                        ? " · " + t("dayOf", { d: v.day })
+                        : ""}
+                    </div>
+                    <Timeline
+                      steps={[
+                        {
+                          label: t("tlSubmitted"),
+                          date: istDateTime(v.submittedAt),
+                          color: "#d97706",
+                          done: true,
+                        },
+                        v.status === "REJECTED"
+                          ? null
+                          : {
+                              label: v.approvedAt ? t("tlApproved") : t("tlWaiting"),
+                              date: v.approvedAt ? istDateTime(v.approvedAt) : "—",
+                              color: "#16a34a",
+                              done: !!v.approvedAt,
+                            },
+                        v.trackEnd
+                          ? {
+                              label: v.done ? t("tlEnded") : t("tlEnds"),
+                              date: istDateTime(v.trackEnd),
+                              color: v.done ? "#16a34a" : "#2563eb",
+                              done: v.done,
+                            }
+                          : null,
+                      ]}
+                    />
                     {v.status === "APPROVED" && !isB && (
-                      <div style={{ fontSize: 13 }}>
-                        {t("payViews")}: {num(v.views)}
+                      <div style={{ fontSize: 13, marginTop: 4 }}>
+                        {v.state === "COMPLETED" && v.eligibleViews === null ? (
+                          t("waitingAdmin")
+                        ) : v.state === "COMPLETED" ? (
+                          <>
+                            {t("eligibleViews")}:{" "}
+                            <b>{num(v.eligibleViews ?? 0)}</b> · {t("payment")}
+                            : <b>{inr(v.payment ?? 0)}</b>
+                          </>
+                        ) : (
+                          t("notFinal", { d: istDateTime(v.trackEnd) })
+                        )}
                       </div>
                     )}
                     {v.reason && (
@@ -315,7 +494,9 @@ export default function MiniApp() {
               <div style={box}>
                 <select id="ap" style={inp}>
                   {PLATFORMS.map((p) => (
-                    <option key={p}>{p}</option>
+                    <option key={p} value={p}>
+                      {PNAME[p]}
+                    </option>
                   ))}
                 </select>
                 <input
@@ -532,7 +713,7 @@ export default function MiniApp() {
                 onClick={() => {
                   setTab(x);
                   setMsg("");
-                  call({ action: "me" });
+                  if (Date.now() - last.current > 30_000) call({ action: "me" }); // fresh enough: no new request
                 }}
                 style={{
                   flex: 1,
@@ -548,7 +729,7 @@ export default function MiniApp() {
               </button>
             ))}
           </nav>
-        </>
+        </fieldset>
       )}
     </main>
   );

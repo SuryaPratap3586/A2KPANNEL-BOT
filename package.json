@@ -8,7 +8,8 @@
     "start": "next start",
     "bots": "tsx bots/index.ts",
     "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:retrack": "tsx prisma/retrack.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

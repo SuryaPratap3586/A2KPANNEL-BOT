@@ -6,10 +6,7 @@ const KEEP_DAYS = 3;
 
 export default async function Audit() {
   await pageSuper();
-  // Logs older than 3 days are deleted automatically: every time this page opens, and by the nightly cron.
-  await db.auditLog.deleteMany({
-    where: { createdAt: { lt: new Date(Date.now() - KEEP_DAYS * 86_400_000) } },
-  });
+  // Logs older than 3 days are deleted by the cron (not on every page open, which made this page slow).
   const logs = await db.auditLog.findMany({
     orderBy: { createdAt: "desc" },
     take: 300,

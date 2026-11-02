@@ -1,8 +1,13 @@
 import { Telegraf, Markup } from "telegraf";
 import { db } from "../src/lib/db";
-import { registerBlogger, setLang, submitVideo } from "../src/lib/services";
-import { detectPlatform } from "../src/lib/platforms";
-import { Lang, tr } from "../src/lib/i18n";
+import {
+  registerBlogger,
+  setLang,
+  submitVideoByUsername,
+} from "../src/lib/services";
+import { detectPlatform, isBloggerPlatform } from "../src/lib/platforms";
+import { Key, Lang, tr } from "../src/lib/i18n";
+import { istDateTime, trackState } from "../src/lib/week";
 import {
   background,
   privateOnly,
@@ -21,8 +26,46 @@ const menu = (l: Lang) =>
     ...(WEBAPP_URL
       ? [[Markup.button.webApp(tr(l, "openApp"), WEBAPP_URL)]]
       : []),
+    [Markup.button.callback(tr(l, "myVideos"), "myvideos")],
     [Markup.button.callback(tr(l, "language"), "lang")],
   ]);
+
+/** Last 10 videos as a timeline (IST): 🟠 submitted, 🟢 approved, 🔵 7 days end (✅ once ended). Only these three dates are shown. */
+async function videoTimeline(bloggerId: string, l: Lang) {
+  const vids = await db.video.findMany({
+    where: { bloggerId, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+  if (!vids.length) return tr(l, "noVideos");
+  const now = new Date();
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return vids
+    .map((v) => {
+      const st = trackState(v, now);
+      const approved = v.status === "APPROVED";
+      const lines = [
+        `<b>${v.platform}</b> · ${tr(l, ("ts_" + st) as Key)}`,
+        esc(v.url),
+        `🟠 <b>${tr(l, "tlSubmitted")}:</b> ${istDateTime(v.createdAt)}`,
+      ];
+      if (v.status !== "REJECTED")
+        lines.push(
+          approved && v.reviewedAt
+            ? `🟢 <b>${tr(l, "tlApproved")}:</b> ${istDateTime(v.reviewedAt)}`
+            : `⚪ <i>${tr(l, "tlWaiting")}</i>`,
+        );
+      if (approved)
+        lines.push(
+          st === "COMPLETED"
+            ? `✅ <b>${tr(l, "tlEnded")}:</b> ${istDateTime(v.trackEndsAt)}`
+            : `🔵 <b>${tr(l, "tlEnds")}:</b> ${istDateTime(v.trackEndsAt)}`,
+        );
+      if (v.rejectReason) lines.push(`❌ ${esc(v.rejectReason)}`);
+      return lines.join("\n");
+    })
+    .join("\n\n");
+}
 
 const safe = (fn: (ctx: any) => Promise<unknown>) => async (ctx: any) => {
   quiet(() => ctx.callbackQuery && ctx.answerCbQuery()); // the button stops spinning at once (only buttons can be answered: for a normal message this call throws)
@@ -103,6 +146,20 @@ export function bloggerBot(token: string) {
     }),
   );
   bot.action(
+    "myvideos",
+    safe(async (ctx) => {
+      const b = await db.blogger.findUnique({
+        where: { telegramId: BigInt(ctx.from.id) },
+      });
+      if (!b) return;
+      await ctx.reply(await videoTimeline(b.id, b.lang), {
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
+        ...menu(b.lang),
+      });
+    }),
+  );
+  bot.action(
     /^setlang:(EN|HI)$/,
     safe(async (ctx) => {
       const b = await db.blogger.findUnique({
@@ -115,7 +172,8 @@ export function bloggerBot(token: string) {
     }),
   );
 
-  // A blogger can also paste a video link in the chat to submit it (same rules as the app: Mon-Fri, linked account, no duplicates)
+  // A blogger can also send "<video link> @username" in the chat to submit it (same rules as the app: Instagram / YouTube / Moj / Facebook,
+  // link AND username required, username = an approved account, Mon-Fri, no duplicates)
   bot.on(
     "text",
     safe(async (ctx) => {
@@ -126,7 +184,17 @@ export function bloggerBot(token: string) {
       if (!m) return ctx.reply(tr(l, "pasteLink"), menu(l));
       const platform = detectPlatform(m[0]);
       if (!platform) return ctx.reply("❌ " + tr(l, "e_badUrl"));
-      const r = await submitVideo(blogger.id, platform, m[0]);
+      if (!isBloggerPlatform(platform))
+        return ctx.reply("❌ " + tr(l, "e_platform"));
+      const u = ctx.message.text.replace(m[0], " ").match(/@([\w.-]{2,50})/); // the username, written next to the link
+      if (!u) return ctx.reply("❌ " + tr(l, "botNeedUser"));
+      const r = await submitVideoByUsername(
+        blogger.id,
+        platform,
+        u[1],
+        m[0],
+        "BOT",
+      );
       if ("error" in r) return ctx.reply("❌ " + tr(l, r.error));
       await ctx.reply(
         "✅ " + tr(l, r.unverified ? "unverifiedNote" : "submitted"),

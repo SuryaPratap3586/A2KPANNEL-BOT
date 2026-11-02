@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import Btn from "@/app/admin/Btn";
 import { pageSuper } from "@/lib/auth";
 import { creditEligible, minVideos } from "@/lib/commission";
 import { weekStartIST } from "@/lib/week";
@@ -163,7 +164,7 @@ export default async function AgentWeekly({
               {r.due > 0 ? (
                 <form action={createAgentPayout}>
                   <input type="hidden" name="id" value={r.a.id} />
-                  <button className="btn-g">Create payment</button>
+                  <Btn className="btn-g">Create payment</Btn>
                 </form>
               ) : (
                 <span className="text-xs text-slate-500">nothing due</span>

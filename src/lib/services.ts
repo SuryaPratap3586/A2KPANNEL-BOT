@@ -3,9 +3,22 @@ import { Blogger, Platform, SocialAccount } from "@prisma/client";
 import { db } from "./db";
 import { agentBalance, bloggerBalance } from "./balance";
 import { MIN_WITHDRAW, getAgentBonus } from "./settings";
-import { ownerHint, normalizeVideoUrl, parseAccount } from "./platforms";
+import {
+  accountHasUsername,
+  cleanUsername,
+  isBloggerPlatform,
+  ownerHint,
+  normalizeVideoUrl,
+  parseAccount,
+} from "./platforms";
 import { getVideoInfo } from "./providers";
-import { submissionOpen, weekStartIST } from "./week";
+import {
+  submissionOpen,
+  trackDay,
+  trackEnd,
+  trackState,
+  weekStartIST,
+} from "./week";
 import { randomToken } from "./security";
 import { creditEligible } from "./commission";
 
@@ -21,7 +34,10 @@ export type ErrKey =
   | "e_failed"
   | "e_closed"
   | "e_notLinked"
-  | "e_cantVerify";
+  | "e_cantVerify"
+  | "e_platform"
+  | "e_needUser"
+  | "e_userNotLinked";
 type Err = { error: ErrKey };
 const num = (d: unknown) => Number(d ?? 0);
 
@@ -137,6 +153,7 @@ export async function addAccount(
   platform: Platform,
   raw: string,
 ): Promise<{ ok: true } | Err> {
+  if (!isBloggerPlatform(platform)) return { error: "e_platform" }; // Instagram, YouTube, Moj, Facebook only
   const a = parseAccount(platform, raw);
   if (!a) return { error: "e_badUrl" };
   if (a.ref) {
@@ -180,7 +197,9 @@ export async function submitVideo(
   platform: Platform,
   raw: string,
   only?: SocialAccount | null,
+  via: "APP" | "BOT" = "APP",
 ): Promise<{ ok: true; unverified: boolean } | Err> {
+  if (!isBloggerPlatform(platform)) return { error: "e_platform" }; // Instagram, YouTube, Moj, Facebook only
   if (!submissionOpen()) return { error: "e_closed" };
   const url = normalizeVideoUrl(platform, raw);
   if (!url) return { error: "e_badUrl" };
@@ -193,7 +212,8 @@ export async function submitVideo(
 
   let accountId: string | null = null,
     verified = false;
-  if (platform !== "OTHER") {
+  {
+    // every blogger platform has accounts (Other is no longer accepted)
     const accounts = only
       ? [only]
       : await db.socialAccount.findMany({
@@ -211,9 +231,15 @@ export async function submitVideo(
         const match = accounts.find(
           (a) => a.ref && owners.has(a.ref.toLowerCase()),
         );
-        if (!match) return { error: "e_notLinked" }; // video belongs to some other account
-        accountId = match.id;
-        verified = true;
+        if (match) {
+          accountId = match.id;
+          verified = true;
+        } else if (
+          platform === "FACEBOOK" &&
+          process.env.STRICT_FACEBOOK_OWNER !== "true"
+        )
+          accountId = accounts.length === 1 ? accounts[0].id : null; // Facebook page names, links and ids often differ: accepted as "not verified" for the admin to check
+        else return { error: "e_notLinked" }; // video belongs to some other account
       } else if (process.env.STRICT_OWNER_CHECK === "true")
         return { error: "e_cantVerify" };
     }
@@ -227,9 +253,11 @@ export async function submitVideo(
         accountId,
         ownerVerified: verified,
         weekStart: weekStartIST(),
+        trackEndsAt: trackEnd(), // placeholder: replaced by approval time + 168 h when the admin approves
+        submittedVia: via,
       },
     });
-    return { ok: true, unverified: !verified && platform !== "OTHER" };
+    return { ok: true, unverified: !verified };
   } catch (e: any) {
     if (e?.code === "P2002") {
       // same link submitted at the same moment
@@ -241,6 +269,31 @@ export async function submitVideo(
     }
     return { error: "e_failed" };
   }
+}
+
+/** Every submission (app and bot) needs the video link AND the username it was posted from (e.g. YouTube @xyz, Instagram @abc).
+ *  The username must be one of the blogger's approved accounts on that platform, and a link that names its owner must name the same user.
+ *  Then the usual checks run for THAT account (Mon-Fri, duplicates, owner check through the APIs). */
+export async function submitVideoByUsername(
+  bloggerId: string,
+  platform: Platform,
+  username: string,
+  raw: string,
+  via: "APP" | "BOT" = "APP",
+): Promise<{ ok: true; unverified: boolean } | Err> {
+  if (!isBloggerPlatform(platform)) return { error: "e_platform" };
+  const user = cleanUsername(username);
+  if (!user) return { error: "e_needUser" };
+  if (!normalizeVideoUrl(platform, raw)) return { error: "e_badUrl" };
+  const accounts = await db.socialAccount.findMany({
+    where: { bloggerId, platform, status: "APPROVED" },
+  });
+  if (!accounts.length) return { error: "e_needAccount" };
+  const acc = accounts.find((a) => accountHasUsername(a, user));
+  if (!acc) return { error: "e_userNotLinked" };
+  const hint = ownerHint(platform, raw); // instagram.com/<user>/reel/..., mojapp.in/@<user>/video/...
+  if (hint && hint !== user) return { error: "e_notLinked" };
+  return submitVideo(bloggerId, platform, raw, acc, via);
 }
 
 /** Blogger picked one of his approved accounts (platform + username) and pasted the link: the video must belong to THAT account. */
@@ -320,6 +373,30 @@ export async function requestWithdrawal(
   }
 }
 
+/** Timeline of one video (ISO timestamps; the app shows them in IST). Tracking = approval timestamp + exactly 168 hours. */
+const timeline = (
+  v: {
+    status: string;
+    createdAt: Date;
+    reviewedAt: Date | null;
+    trackEndsAt: Date;
+    submittedVia: string;
+  },
+  now: Date,
+) => {
+  const approved = v.status === "APPROVED";
+  const state = trackState(v, now);
+  return {
+    state, // PENDING_APPROVAL | TRACKING | COMPLETED | REJECTED
+    via: v.submittedVia,
+    submittedAt: v.createdAt.toISOString(),
+    approvedAt: approved && v.reviewedAt ? v.reviewedAt.toISOString() : null,
+    trackStart: approved ? (v.reviewedAt ?? v.createdAt).toISOString() : null,
+    trackEnd: approved ? v.trackEndsAt.toISOString() : null,
+    day: trackDay(v.trackEndsAt, now),
+    done: state === "COMPLETED",
+  };
+};
 const payRow = (w: any) => ({
   id: w.id,
   amount: num(w.amount),
@@ -344,7 +421,8 @@ export async function bloggerData(id: string) {
     where: { id },
     include: { agent: true },
   });
-  const [accounts, videos, pays, balance, agg, reposts, cnt] =
+  const now = new Date();
+  const [accounts, videos, pays, balance, agg, reposts, cnt, doneN] =
     await Promise.all([
       db.socialAccount.findMany({
         where: { bloggerId: id },
@@ -352,7 +430,7 @@ export async function bloggerData(id: string) {
         take: 50,
       }),
       db.video.findMany({
-        where: { bloggerId: id },
+        where: { bloggerId: id, deletedAt: null }, // deleted from the admin archive = hidden (earnings stay in the balance)
         orderBy: { createdAt: "desc" },
         take: 50,
       }),
@@ -363,9 +441,9 @@ export async function bloggerData(id: string) {
       }),
       bloggerBalance(id),
       db.video.aggregate({
-        where: { bloggerId: id, status: "APPROVED" },
+        where: { bloggerId: id, status: "APPROVED", trackEndsAt: { lte: now } },
         _sum: { views: true },
-      }),
+      }), // total views = videos whose 7 days are complete
       db.repost.findMany({
         where: { bloggerId: id },
         orderBy: { createdAt: "desc" },
@@ -375,6 +453,9 @@ export async function bloggerData(id: string) {
         by: ["status"],
         where: { bloggerId: id },
         _count: { _all: true },
+      }),
+      db.video.count({
+        where: { bloggerId: id, status: "APPROVED", trackEndsAt: { lte: now } },
       }),
     ]);
   const c = (st: string) => cnt.find((x) => x.status === st)?._count._all ?? 0;
@@ -391,6 +472,7 @@ export async function bloggerData(id: string) {
     counts: {
       pending: c("PENDING"),
       approved: c("APPROVED"),
+      completed: doneN,
       rejected: c("REJECTED"),
     },
     accounts: accounts.map((a) => ({
@@ -398,6 +480,7 @@ export async function bloggerData(id: string) {
       platform: a.platform,
       url: a.url,
       status: a.status,
+      ref: a.ref, // used by the app to check the typed username
       label: accLabel(a),
       reason: a.rejectReason,
     })),
@@ -408,6 +491,7 @@ export async function bloggerData(id: string) {
       url: v.url,
       status: v.status,
       reason: v.rejectReason,
+      ...timeline(v, now),
     })),
     reposts: reposts.map((r) => ({
       id: r.id,
@@ -425,6 +509,7 @@ export async function agentData(id: string) {
     include: { plan: true },
   });
   const mine = { blogger: { agentId: id } };
+  const now = new Date();
   const [bloggers, videos, pays, balance, bonusAgg] = await Promise.all([
     db.blogger.findMany({
       where: { agentId: id, status: { not: "DELETED" } },
@@ -433,7 +518,7 @@ export async function agentData(id: string) {
       take: 100,
     }),
     db.video.findMany({
-      where: mine,
+      where: { ...mine, deletedAt: null },
       include: { blogger: true },
       orderBy: { createdAt: "desc" },
       take: 50,
@@ -475,8 +560,16 @@ export async function agentData(id: string) {
       platform: v.platform,
       url: v.url,
       status: v.status,
-      views: v.views,
+      reason: v.rejectReason,
       blogger: v.blogger.name,
+      ...timeline(v, now),
+      // Final (eligible) views and payment exist only after the 168 hours AND after the admin entered the payable views
+      eligibleViews:
+        trackState(v, now) === "COMPLETED" && v.viewsEdited ? v.views : null,
+      payment:
+        trackState(v, now) === "COMPLETED" && v.viewsEdited
+          ? num(v.earnings)
+          : null,
     })),
     payments: pays.map(payRow),
   };

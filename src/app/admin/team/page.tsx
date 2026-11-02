@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import Btn from "@/app/admin/Btn";
 import { pageSuper } from "@/lib/auth";
 import { createAdmin, resetAdminPassword, setAdminActive, setAdminRole } from "../actions";
 export const dynamic = "force-dynamic";
@@ -13,13 +14,13 @@ export default async function Team({ searchParams }: { searchParams: { msg?: str
       <input name="name" required minLength={2} placeholder="Name" className="inp" />
       <input name="email" type="email" required placeholder="Login email" className="inp" />
       <input name="password" type="password" required minLength={12} placeholder="Password (min 12)" className="inp" autoComplete="new-password" />
-      <button className="btn">Create admin</button></form>
+      <Btn className="btn">Create admin</Btn></form>
     <div className="card"><table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Super access</th><th>Login</th><th>Reset password</th></tr></thead><tbody>
       {admins.map((a) => <tr key={a.id}><td>{a.name}{a.id === me.id ? " (you)" : ""}<div className="text-xs text-slate-500">{a.email}</div></td>
         <td>{a.role === "SUPER" ? "Super admin" : "Admin"}</td><td>{a.active ? "Active" : "Deactivated"}</td>
-        <td><form action={setAdminRole}><input type="hidden" name="id" value={a.id} /><input type="hidden" name="role" value={a.role === "SUPER" ? "ADMIN" : "SUPER"} /><button className={a.role === "SUPER" ? "btn-r" : "btn-g"}>{a.role === "SUPER" ? "Remove super access" : "Make super admin"}</button></form></td>
-        <td><form action={setAdminActive}><input type="hidden" name="id" value={a.id} /><input type="hidden" name="active" value={String(!a.active)} /><button className={a.active ? "btn-r" : "btn-g"}>{a.active ? "Deactivate" : "Activate"}</button></form></td>
-        <td><form action={resetAdminPassword} className="flex gap-1"><input type="hidden" name="id" value={a.id} /><input name="password" type="password" required minLength={12} placeholder="New password" className="inp w-36" autoComplete="new-password" /><button className="btn">Reset</button></form></td></tr>)}
+        <td><form action={setAdminRole}><input type="hidden" name="id" value={a.id} /><input type="hidden" name="role" value={a.role === "SUPER" ? "ADMIN" : "SUPER"} /><Btn className={a.role === "SUPER" ? "btn-r" : "btn-g"}>{a.role === "SUPER" ? "Remove super access" : "Make super admin"}</Btn></form></td>
+        <td><form action={setAdminActive}><input type="hidden" name="id" value={a.id} /><input type="hidden" name="active" value={String(!a.active)} /><Btn className={a.active ? "btn-r" : "btn-g"}>{a.active ? "Deactivate" : "Activate"}</Btn></form></td>
+        <td><form action={resetAdminPassword} className="flex gap-1"><input type="hidden" name="id" value={a.id} /><input name="password" type="password" required minLength={12} placeholder="New password" className="inp w-36" autoComplete="new-password" /><Btn className="btn">Reset</Btn></form></td></tr>)}
     </tbody></table>
     <p className="text-xs text-slate-500 mt-2">To hand over super access: make the other person Super admin, then remove your own. At least one active super admin must always remain.</p></div></>);
 }

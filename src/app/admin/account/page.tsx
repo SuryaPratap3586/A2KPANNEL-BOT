@@ -1,4 +1,5 @@
 import { pageStaff } from "@/lib/auth";
+import Btn from "@/app/admin/Btn";
 import { changeOwnPassword } from "../actions";
 export const dynamic = "force-dynamic";
 export default async function Account({ searchParams }: { searchParams: { msg?: string } }) {
@@ -9,5 +10,5 @@ export default async function Account({ searchParams }: { searchParams: { msg?: 
     <form action={changeOwnPassword} className="card space-y-2 max-w-sm"><h2 className="font-medium">Change password</h2>
       <input name="current" type="password" required placeholder="Current password" className="inp w-full" autoComplete="current-password" />
       <input name="next" type="password" required minLength={12} placeholder="New password (min 12 characters)" className="inp w-full" autoComplete="new-password" />
-      <button className="btn">Change password</button></form></>);
+      <Btn className="btn">Change password</Btn></form></>);
 }

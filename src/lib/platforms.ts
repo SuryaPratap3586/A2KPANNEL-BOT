@@ -1,4 +1,4 @@
-import { Platform } from "@prisma/client";
+import type { Platform } from "@prisma/client"; // type only: this file is also used by the Mini App in the browser
 
 const HOSTS: Record<Platform, string[]> = {
   INSTAGRAM: ["instagram.com"],
@@ -7,6 +7,38 @@ const HOSTS: Record<Platform, string[]> = {
   SHARECHAT: ["sharechat.com"], MOJ: ["mojapp.in", "moj.app", "mojapp.com"], TIKTOK: ["tiktok.com"], OTHER: [],
 };
 export const PLATFORMS = Object.keys(HOSTS) as Platform[];
+/** The only platforms bloggers can add accounts for and submit videos from (old records of other platforms stay as they are). */
+export const BLOGGER_PLATFORMS = ["INSTAGRAM", "YOUTUBE", "MOJ", "FACEBOOK"] as const satisfies readonly Platform[];
+export type BloggerPlatform = (typeof BLOGGER_PLATFORMS)[number];
+export const isBloggerPlatform = (p: string): p is BloggerPlatform => (BLOGGER_PLATFORMS as readonly string[]).includes(p);
+
+/** Username of the account a video was submitted from, for the admin panel: "@abc" (Instagram, Moj, YouTube handle),
+ *  the page name / numeric id (Facebook) or the channel link (YouTube channel id). */
+export function accountName(a: { platform?: string; ref: string | null; url: string } | null): string {
+  if (!a) return "—";
+  if (!a.ref) return a.url.replace(/^https?:\/\/(www\.)?/, "");
+  if (a.ref.startsWith("@")) return a.ref;
+  if (a.platform === "YOUTUBE") return a.url.replace(/^https?:\/\/(www\.)?/, ""); // channel id: the link is more useful
+  if (a.platform === "FACEBOOK" && /^\d+$/.test(a.ref)) return a.ref;
+  return "@" + a.ref;
+}
+
+/** "@xyz" / "xyz" -> "xyz" (lowercase), or null when it is not a valid username / handle / page name / numeric id. */
+export function cleanUsername(raw: string): string | null {
+  const s = raw.trim().replace(/^@/, "").toLowerCase();
+  return /^[a-z0-9._-]{2,50}$/.test(s) ? s : null;
+}
+/** Does the typed username belong to this approved account? Compared with the saved ref and with the profile link. */
+export function accountHasUsername(a: { ref: string | null; url: string }, username: string): boolean {
+  const u = cleanUsername(username);
+  if (!u) return false;
+  const names = new Set<string>();
+  if (a.ref) names.add(a.ref.replace(/^@/, "").toLowerCase());
+  try {
+    for (const seg of new URL(a.url).pathname.split("/").filter(Boolean)) names.add(decodeURIComponent(seg).replace(/^@/, "").toLowerCase());
+  } catch {}
+  return names.has(u);
+}
 const TRACK = /^(utm_.*|igsh|igshid|fbclid|si|feature|pp|mibextid|rdid|share_url)$/i;
 const IG_RESERVED = new Set(["reel", "reels", "p", "tv", "stories", "explore", "accounts", "direct", "about", "share"]);
 const FB_RESERVED = new Set(["reel", "reels", "watch", "share", "videos", "groups", "pages", "people", "login", "photo", "hashtag", "marketplace", "events", "stories", "gaming", "help", "permalink.php"]);
@@ -55,6 +87,8 @@ export function normalizeVideoUrl(platform: Platform, raw: string): string | nul
     m = path.match(/^\/share\/([rvp])\/([\w-]+)$/); if (m) return `https://www.facebook.com/share/${m[1]}/${m[2]}/`;
     if (path === "/watch") { const v = u.searchParams.get("v"); return v && /^\d+$/.test(v) ? `https://www.facebook.com/watch/?v=${v}` : null; }
     m = path.match(/^(?:\/[\w.-]+)?\/videos\/(\d+)$/); if (m) return `https://www.facebook.com${path}`;
+    m = path.match(/^(\/[\w.-]+)?\/videos\/[^/]+\/(\d+)$/); if (m) return `https://www.facebook.com${m[1] ?? ""}/videos/${m[2]}`;   // /<page>/videos/<title>/<id> -> same form as above
+    m = path.match(/^\/[\w.-]+\/reels?\/(\d+)$/); if (m) return `https://www.facebook.com/reel/${m[1]}`;                         // /<page>/reel/<id>
     return null;
   }
   for (const k of [...u.searchParams.keys()]) u.searchParams.delete(k);
@@ -66,7 +100,8 @@ export function ownerHint(platform: Platform, raw: string): string | null {
   const u = parse(raw); if (!u) return null;
   const p = u.pathname.replace(/\/+$/, "");
   if (platform === "INSTAGRAM") { const m = p.match(/^\/([\w.]+)\/(?:reel|reels|p|tv)\/[\w-]+$/); return m && !IG_RESERVED.has(m[1].toLowerCase()) ? m[1].toLowerCase() : null; }
-  if (platform === "FACEBOOK") { const m = p.match(/^\/([\w.-]+)\/videos\/\d+$/); return m ? m[1].toLowerCase() : null; }
+  if (platform === "FACEBOOK") { const m = p.match(/^\/([\w.-]+)\/(?:videos\/(?:[^/]+\/)?|reels?\/)\d+$/); return m && !FB_RESERVED.has(m[1].toLowerCase()) ? m[1].toLowerCase() : null; }
+  if (platform === "MOJ") { const m = p.match(/^\/@([\w.-]+)\//); return m ? m[1].toLowerCase() : null; }   // mojapp.in/@user/video/...
   return null;
 }
 
@@ -89,9 +124,14 @@ export function parseAccount(platform: Platform, raw: string): { url: string; re
   if (platform === "FACEBOOK") {
     if (segs[0] === "profile.php") { const id = u.searchParams.get("id"); return id && /^\d+$/.test(id) ? { url: `https://www.facebook.com/profile.php?id=${id}`, ref: id } : null; }
     if ((segs[0] === "people" || segs[0] === "pages") && /^\d+$/.test(segs[2] ?? "")) return { url: `https://www.facebook.com/${segs[0]}/${segs[1]}/${segs[2]}`, ref: segs[2] };
+    if (segs[0] === "p" && /-(\d{6,})$/.test(segs[1] ?? "")) return { url: `https://www.facebook.com/p/${segs[1]}/`, ref: segs[1].match(/-(\d{6,})$/)![1] };   // new page links: /p/Page-Name-100064.../
     const s = segs[0]?.toLowerCase();
     if (!s || !/^[a-z0-9.\-]{3,}$/.test(s) || FB_RESERVED.has(s)) return null;
     return { url: `https://www.facebook.com/${s}`, ref: s };
+  }
+  if (platform === "MOJ") {                                           // mojapp.in/@username
+    const m = (segs[0] ?? "").match(/^@([\w.-]{2,})$/);
+    return m ? { url: `https://mojapp.in/@${m[1].toLowerCase()}`, ref: m[1].toLowerCase() } : null;
   }
   for (const k of [...u.searchParams.keys()]) if (TRACK.test(k)) u.searchParams.delete(k);
   if (u.pathname.length < 2) return null;

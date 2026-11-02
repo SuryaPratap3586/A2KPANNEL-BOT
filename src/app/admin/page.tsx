@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
+import Btn from "@/app/admin/Btn";
 import { pageSuper } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 const RANGES: [string, string][] = [
@@ -77,35 +79,7 @@ export default async function Dashboard({
     };
   });
 
-  // ---- Month-wise report (IST months, last 12) ----
-  const msince = new Date(Date.now() - 400 * 86_400_000);
-  type N = { m: string; n: number };
-  const [mAg, mBl, mVs, mRv, mVh, mWr, mPd, mCm] = await Promise.all([
-    db.$queryRaw<
-      N[]
-    >`SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COUNT(*)::int AS n FROM "Agent" WHERE "createdAt" >= ${msince} GROUP BY 1`,
-    db.$queryRaw<
-      N[]
-    >`SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COUNT(*)::int AS n FROM "Blogger" WHERE "createdAt" >= ${msince} AND "status" <> 'DELETED' GROUP BY 1`,
-    db.$queryRaw<
-      N[]
-    >`SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COUNT(*)::int AS n FROM "Video" WHERE "createdAt" >= ${msince} GROUP BY 1`,
-    db.$queryRaw<
-      { m: string; a: number; r: number }[]
-    >`SELECT to_char(("reviewedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, (COUNT(*) FILTER (WHERE "status" = 'APPROVED'))::int AS a, (COUNT(*) FILTER (WHERE "status" = 'REJECTED'))::int AS r FROM "Video" WHERE "reviewedAt" >= ${msince} GROUP BY 1`,
-    db.$queryRaw<
-      { m: string; v: number; e: number }[]
-    >`SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COALESCE(SUM("delta"),0)::float8 AS v, COALESCE(SUM("earned"),0)::float8 AS e FROM "ViewHistory" WHERE "createdAt" >= ${msince} GROUP BY 1`,
-    db.$queryRaw<
-      { m: string; amt: number }[]
-    >`SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COALESCE(SUM("amount"),0)::float8 AS amt FROM "Withdrawal" WHERE "createdAt" >= ${msince} AND "status" <> 'REJECTED' GROUP BY 1`,
-    db.$queryRaw<
-      { m: string; amt: number }[]
-    >`SELECT to_char(("updatedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COALESCE(SUM("amount"),0)::float8 AS amt FROM "Withdrawal" WHERE "updatedAt" >= ${msince} AND "status" = 'PAID' GROUP BY 1`,
-    db.$queryRaw<
-      { m: string; amt: number }[]
-    >`SELECT to_char(("bonusCreditedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS m, COALESCE(SUM("agentBonus"),0)::float8 AS amt FROM "Blogger" WHERE "bonusCreditedAt" >= ${msince} AND "status" <> 'DELETED' GROUP BY 1`,
-  ]);
+  // Month list for the selector (IST months, last 12). The monthly table below is hidden, so its 8 queries are no longer run.
   const nowIST = new Date(Date.now() + 5.5 * 3600_000);
   const months = Array.from({ length: 12 }, (_, i) => {
     const d = new Date(
@@ -120,10 +94,6 @@ export default async function Dashboard({
       }),
     };
   });
-  const g = <T extends { m: string }>(rows: T[], m: string) =>
-    rows.find((r) => r.m === m);
-  const inr = (x?: number) =>
-    (x ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
   // ---- Cards: This month (default), Last month, All time, or any of the last 12 months (IST) ----
   const fmt = (n: number) => n.toLocaleString("en-IN");
@@ -210,15 +180,15 @@ export default async function Dashboard({
     <>
       <h1 className="text-xl font-semibold">Dashboard</h1>
       <div className="flex flex-wrap items-center gap-2">
-        <a href="?m=this" className={tab(sel === "this")}>
+        <Link href="/admin?m=this" className={tab(sel === "this")}>
           This month ({months[0].label})
-        </a>
-        <a href="?m=prev" className={tab(sel === "prev")}>
+        </Link>
+        <Link href="/admin?m=prev" className={tab(sel === "prev")}>
           Last month ({months[1].label})
-        </a>
-        <a href="?m=all" className={tab(!selKey)}>
+        </Link>
+        <Link href="/admin?m=all" className={tab(!selKey)}>
           All time
-        </a>
+        </Link>
         <form className="flex gap-1">
           <select name="m" defaultValue="" className="inp">
             <option value="" disabled>
@@ -230,7 +200,7 @@ export default async function Dashboard({
               </option>
             ))}
           </select>
-          <button className="btn">Show</button>
+          <Btn className="btn">Show</Btn>
         </form>
       </div>
       <p className="text-sm text-slate-500">
@@ -248,15 +218,15 @@ export default async function Dashboard({
         <div className="flex items-center gap-3">
           <h2 className="font-medium">Admin work report</h2>
           {RANGES.map(([k, l]) => (
-            <a
+            <Link
               key={k}
-              href={`?range=${k}`}
+              href={`/admin?range=${k}`}
               className={
                 "text-sm underline " + (k === range ? "font-bold" : "")
               }
             >
               {l}
-            </a>
+            </Link>
           ))}
         </div>
         <table>
