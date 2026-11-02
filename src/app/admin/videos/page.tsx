@@ -2,18 +2,15 @@ import type { Prisma } from "@prisma/client";
 import Btn from "@/app/admin/Btn";
 import { db } from "@/lib/db";
 import { pageStaff } from "@/lib/auth";
-import { istDateTime, trackDay, trackState } from "@/lib/week";
+import { istDateTime, trackState } from "@/lib/week";
 import PlanBadge from "../PlanBadge";
-import {
-  reviewVideo,
-  setViews,
-  fetchOneAction,
-  fetchAllAction,
-} from "../actions";
+import { reviewVideo, fetchAllAction } from "../actions";
+import VideoCard from "./VideoCard";
 export const dynamic = "force-dynamic";
 
-// Every approved video has its OWN 7 days (day 1 = the day the admin APPROVED it). While they run, the video is in "Tracking";
-// when the 7 days are over it moves to "Completed", and only then its earnings count in the blogger's balance.
+// Every approved video has its OWN 168 hours (from the approval time). While they run, the video is in "Tracking";
+// when they are over it moves to "Completed". Views: INITIAL (fetched at approval) and 7-DAY (fetched after the 168 hours),
+// difference = 7-day - initial. Payment comes only from the payable views the admin enters on Completed.
 const TABS = [
   "PENDING",
   "TRACKING",
@@ -40,28 +37,21 @@ const REASONS = [
   "Account not linked",
 ];
 const fmt = (n: number) => n.toLocaleString("en-IN");
-const istDate = (d: Date) =>
-  new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
 const STATE: Record<string, [string, string]> = {
   PENDING_APPROVAL: ["Pending Approval", "text-amber-700"],
   TRACKING: ["Tracking in Progress", "text-blue-700"],
   COMPLETED: ["7 Days Completed", "text-green-700"],
   REJECTED: ["Rejected", "text-red-700"],
 };
+type TimelineV = {
+  status: string;
+  createdAt: Date;
+  reviewedAt: Date | null;
+  trackEndsAt: Date;
+  submittedVia: string;
+};
 /** Submission, approval and tracking timestamps (IST). Tracking = approval timestamp + exactly 168 hours. */
-function Timeline({
-  v,
-  now,
-}: {
-  v: {
-    status: string;
-    createdAt: Date;
-    reviewedAt: Date | null;
-    trackEndsAt: Date;
-    submittedVia: string;
-  };
-  now: Date;
-}) {
+function Timeline({ v, now }: { v: TimelineV; now: Date }) {
   const [label, tone] = STATE[trackState(v, now)];
   return (
     <div className="text-xs text-slate-500 space-y-0.5 mt-1">
@@ -85,8 +75,6 @@ function Timeline({
     </div>
   );
 }
-const gained = (v: { liveViews: number; baseViews: number | null }) =>
-  Math.max(0, v.liveViews - (v.baseViews ?? v.liveViews)); // views gained since approval
 
 // Visible to every admin: all bloggers' videos, approve/reject with reason, fetch views (auto) or type views (manual).
 export default async function Videos({
@@ -184,7 +172,7 @@ export default async function Videos({
     <>
       <h1 className="text-xl font-semibold">Videos</h1>
       {searchParams.msg && <p className="card text-sm">{searchParams.msg}</p>}
-      <div className="flex flex-wrap gap-4 text-sm">
+      <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
         {TABS.map((t) => (
           <a
             key={t}
@@ -195,32 +183,44 @@ export default async function Videos({
           </a>
         ))}
       </div>
+      {approvedTab && (
+        <details className="card text-xs text-slate-600">
+          <summary className="cursor-pointer text-sm font-medium">
+            How views and payment work
+          </summary>
+          <ul className="list-disc pl-5 mt-2 space-y-1">
+            <li>
+              <b>Initial views</b> are fetched when the video is approved. Its
+              168 hours (7 days) start at that moment.
+            </li>
+            <li>
+              <b>7-day views</b> are fetched by the hourly cron after the 168
+              hours. <b>View difference</b> = 7-day views − initial views.
+            </li>
+            <li>
+              If a fetch fails, the reason is shown under <b>Fetch status</b>{" "}
+              and you can type the views under <b>Enter views manually</b>.
+            </li>
+            <li>
+              Fetched views never create a payment. On the Completed tab you
+              enter the <b>payable views</b>; the payment is calculated only
+              from them.
+            </li>
+          </ul>
+        </details>
+      )}
       {tab === "TRACKING" && (
-        <form action={fetchAllAction}>
-          <Btn className="btn">
-            Run due fetches now (starting + final views)
-          </Btn>{" "}
+        <form action={fetchAllAction} className="flex flex-wrap items-center gap-2">
+          <Btn className="btn">Run due fetches now</Btn>
           <span className="text-xs text-slate-500">
-            Actual views are fetched twice: at approval (starting views) and once
-            the 168 hours are over (final views); the hourly cron does this
-            automatically. Fetched views never create a payment: after the 168
-            hours you enter the payable views on the Completed tab, and the
-            payment is calculated only from them.
+            Fetches missing initial views and the 7-day views of videos whose
+            168 hours are over (the hourly cron does the same).
           </span>
         </form>
       )}
-      {tab === "COMPLETED" && (
-        <p className="text-xs text-slate-500">
-          These videos finished their 168 hours. Check the actual views (final -
-          starting = gained), then enter the payable views and press Save: the
-          payment is calculated only from the payable views you enter and goes
-          into the blogger's balance. You can change them again later; only the
-          difference is added or removed.
-        </p>
-      )}
       {tab === "PENDING" && (
         <p className="text-xs text-slate-500">
-          Approving a video fetches its starting views and starts its own 168
+          Approving a video fetches its initial views and starts its own 168
           hours. The submitted time is shown under each video.
         </p>
       )}
@@ -230,37 +230,16 @@ export default async function Videos({
         ))}
       </datalist>
 
-      {isVideoTab && (
-        <div className="card">
-          <table>
+      {/* Pending / Rejected: compact table (scrolls sideways on small screens) */}
+      {isVideoTab && !approvedTab && (
+        <div className="card overflow-x-auto">
+          <table className="min-w-[640px]">
             <thead>
               <tr>
                 <th>Blogger / Agent</th>
                 <th>Platform</th>
                 <th>Video</th>
-                {tab === "PENDING" && <th>Moderate</th>}
-                {tab !== "PENDING" && <th>Reviewed by</th>}
-                {approvedTab && (
-                  <>
-                    <th>7-day window</th>
-                    <th>Actual views (fetched)</th>
-                    <th>Likes</th>
-                    <th>Comments</th>
-                    <th>
-                      {tab === "TRACKING"
-                        ? "Payable views (entered after the 168 h)"
-                        : "Payable views (entered by admin, paid on)"}
-                    </th>
-                    {me.role === "SUPER" && (
-                      <th>
-                        {tab === "TRACKING"
-                          ? "Payment ₹ (after the 168 h)"
-                          : "Payment ₹ (from payable views)"}
-                      </th>
-                    )}
-                    <th>Update</th>
-                  </>
-                )}
+                {tab === "PENDING" ? <th>Moderate</th> : <th>Reviewed by</th>}
                 {tab === "REJECTED" && <th>Reason</th>}
               </tr>
             </thead>
@@ -277,20 +256,20 @@ export default async function Videos({
                   <td>{v.platform}</td>
                   <td>
                     {open(v.url)}
-                    <div className="text-xs text-slate-500">
-                      {v.url.slice(0, 44)}
+                    <div className="text-xs text-slate-500 break-all">
+                      {v.url.slice(0, 60)}
                     </div>
                     <Timeline v={v} now={now} />
                     {owner(v)}
                   </td>
-                  {tab === "PENDING" && (
+                  {tab === "PENDING" ? (
                     <td className="space-y-1">
                       <form action={reviewVideo}>
                         <input type="hidden" name="id" value={v.id} />
                         <input type="hidden" name="decision" value="APPROVED" />
                         <Btn className="btn-g">Approve</Btn>
                       </form>
-                      <form action={reviewVideo} className="flex gap-1">
+                      <form action={reviewVideo} className="flex flex-wrap gap-1">
                         <input type="hidden" name="id" value={v.id} />
                         <input type="hidden" name="decision" value="REJECTED" />
                         <input
@@ -304,174 +283,8 @@ export default async function Videos({
                         <Btn className="btn-r">Reject</Btn>
                       </form>
                     </td>
-                  )}
-                  {tab !== "PENDING" && <td>{v.reviewedBy?.name ?? "—"}</td>}
-                  {approvedTab && (
-                    <>
-                      <td>
-                        {tab === "TRACKING" ? (
-                          <>
-                            <b>Day {trackDay(v.trackEndsAt, now)} of 7</b>
-                            <div className="text-xs text-slate-500">
-                              {istDateTime(v.reviewedAt ?? v.createdAt)} →{" "}
-                              {istDateTime(v.trackEndsAt)} (168 h)
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <b className="text-green-700">7 days completed ✓</b>
-                            <div className="text-xs text-slate-500">
-                              at {istDateTime(v.trackEndsAt)}
-                            </div>
-                          </>
-                        )}
-                      </td>
-                      <td>
-                        <b>{fmt(v.liveViews)}</b>
-                        <div className="text-xs text-slate-500">
-                          starting (at approval):{" "}
-                          {v.baseViews === null
-                            ? "not fetched"
-                            : fmt(v.baseViews)}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {tab === "COMPLETED" ? "final gained" : "gained so far"}:{" "}
-                          <b>{fmt(gained(v))}</b>
-                        </div>
-                      </td>
-                      <td>{fmt(v.likes)}</td>
-                      <td>{fmt(v.comments)}</td>
-                      <td>
-                        {tab === "TRACKING" ? (
-                          <div className="text-xs text-slate-500">
-                            enter after {istDateTime(v.trackEndsAt)}
-                          </div>
-                        ) : v.viewsEdited ? (
-                          <>
-                            <b>{fmt(v.views)}</b>
-                            <div className="text-xs text-green-700">
-                              entered by admin
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-xs text-amber-700">
-                            not entered yet: no payment
-                          </div>
-                        )}
-                        {tab === "COMPLETED" && !v.frozen && (
-                          <div className="text-xs text-slate-500">
-                            final fetch pending (next hourly run)
-                          </div>
-                        )}
-                        {tab === "COMPLETED" && v.baseViews === null && (
-                          <div className="text-xs text-amber-700">
-                            starting views were not fetched: check the views on
-                            the video itself
-                          </div>
-                        )}
-                        {v.frozen && (
-                          <div className="text-xs text-slate-500">
-                            fetching closed
-                          </div>
-                        )}
-                      </td>
-                      {me.role === "SUPER" && <td>{v.earnings.toString()}</td>}
-                      <td className="space-y-1">
-                        <div className="flex gap-1">
-                          <form action={fetchOneAction}>
-                            <input type="hidden" name="id" value={v.id} />
-                            <Btn className="btn">Fetch</Btn>
-                          </form>
-                        </div>
-                        {tab === "TRACKING" ? (
-                          <p className="text-xs text-slate-500">
-                            Payable views can be entered once the 168 hours are
-                            complete.
-                          </p>
-                        ) : (
-                        <form action={setViews} className="space-y-1">
-                          <input type="hidden" name="id" value={v.id} />
-                          <label className="block text-xs text-slate-500">
-                            Payable views (payment is calculated from this)
-                            <input
-                              name="views"
-                              type="number"
-                              min={0}
-                              required
-                              defaultValue={v.viewsEdited ? v.views : gained(v)}
-                              className="inp w-full"
-                            />
-                          </label>
-                          {!v.viewsEdited && (
-                            <p className="text-xs text-slate-500">
-                              Filled with the fetched gained views. Nothing is
-                              paid until you press Save.
-                            </p>
-                          )}
-                          <label className="block text-xs text-slate-500">
-                            Likes
-                            <input
-                              name="likes"
-                              type="number"
-                              min={0}
-                              defaultValue={v.likes}
-                              className="inp w-full"
-                            />
-                          </label>
-                          <label className="block text-xs text-slate-500">
-                            Comments
-                            <input
-                              name="comments"
-                              type="number"
-                              min={0}
-                              defaultValue={v.comments}
-                              className="inp w-full"
-                            />
-                          </label>
-                          <Btn className="btn">Save</Btn>
-                        </form>
-                        )}
-                        <details>
-                          <summary className="text-xs underline cursor-pointer">
-                            7-day history
-                          </summary>
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>Date</th>
-                                <th>Live</th>
-                                <th>Gained</th>
-                                <th>Payable</th>
-                                <th>Likes</th>
-                                <th>Comments</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {stats
-                                .filter((s) => s.videoId === v.id)
-                                .map((s) => (
-                                  <tr key={s.id}>
-                                    <td>{s.day.toISOString().slice(0, 10)}</td>
-                                    <td>{fmt(s.liveViews)}</td>
-                                    <td>
-                                      {fmt(
-                                        Math.max(
-                                          0,
-                                          s.liveViews -
-                                            (v.baseViews ?? s.liveViews),
-                                        ),
-                                      )}
-                                    </td>
-                                    <td>{fmt(s.payViews)}</td>
-                                    <td>{fmt(s.likes)}</td>
-                                    <td>{fmt(s.comments)}</td>
-                                  </tr>
-                                ))}
-                            </tbody>
-                          </table>
-                        </details>
-                      </td>
-                    </>
+                  ) : (
+                    <td>{v.reviewedBy?.name ?? "—"}</td>
                   )}
                   {tab === "REJECTED" && <td>{v.rejectReason}</td>}
                 </tr>
@@ -484,13 +297,32 @@ export default async function Videos({
         </div>
       )}
 
+      {/* Tracking / Completed: one card per video (see VideoCard.tsx) */}
+      {approvedTab && (
+        <div className="space-y-4">
+          {list.map((v) => (
+            <VideoCard
+              key={v.id}
+              v={v}
+              stats={stats.filter((s) => s.videoId === v.id)}
+              tab={tab as "TRACKING" | "COMPLETED"}
+              now={now}
+              isSuper={me.role === "SUPER"}
+            />
+          ))}
+          {!list.length && (
+            <p className="card text-sm text-slate-500">Nothing here.</p>
+          )}
+        </div>
+      )}
+
       {tab === "REPOSTS" && (
-        <div className="card">
+        <div className="card overflow-x-auto">
           <p className="text-sm text-slate-500">
             Links that were submitted again (duplicates). They are not counted.
             Records older than 14 days are deleted automatically.
           </p>
-          <table>
+          <table className="min-w-[560px]">
             <thead>
               <tr>
                 <th>Date</th>

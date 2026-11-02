@@ -122,6 +122,36 @@ export async function setViews(fd: FormData) {
   revalidatePath("/admin/videos");
 }
 
+/** Admin types the INITIAL and / or 7-DAY views when fetching failed (or to correct them). These are actual views only:
+ *  they never create a payment (payable views are entered separately). 7-day views only after the 168 hours; then fetching stops. */
+export async function setActualViews(fd: FormData) {
+  const me = await requireStaff();
+  const vid = id.parse(fd.get("id"));
+  const count = z.coerce.number().int().min(0).max(2_000_000_000);
+  const opt = (k: string) => {
+    const raw = fd.get(k);
+    return raw === null || raw === "" ? undefined : count.parse(raw);
+  };
+  const initial = opt("initial"),
+    final = opt("final");
+  const back2 = (m: string) => back("/admin/videos?status=" + String(fd.get("tab") ?? "TRACKING"), m);
+  if (initial === undefined && final === undefined) back2("Enter the initial views, the 7-day views, or both.");
+  const v = await db.video.findUnique({ where: { id: vid } });
+  if (!v || v.status !== "APPROVED") back2("This video is not approved.");
+  const now = new Date();
+  if (final !== undefined && v!.trackEndsAt > now)
+    back2(`7-day views can be entered after the 168 hours are complete (${istDateTime(v!.trackEndsAt)} IST).`);
+  await db.video.update({
+    where: { id: vid },
+    data: {
+      ...(initial !== undefined ? { baseViews: initial, baseAt: now, baseManual: true } : {}),
+      ...(final !== undefined ? { finalViews: final, finalAt: now, finalManual: true, frozen: true } : {}),
+    },
+  });
+  await log(me.email, "VIEWS_ACTUAL_MANUAL", `${vid}${initial !== undefined ? " initial=" + initial : ""}${final !== undefined ? " 7day=" + final : ""}`);
+  back2("Actual views saved." + (final !== undefined ? " Now check the difference and enter the payable views." : ""));
+}
+
 export async function resetToLiveAction(fd: FormData) {
   // admin chooses to pay on the fetched gained views (final - starting); only after the 168 hours
   const me = await requireStaff();
@@ -139,7 +169,7 @@ export async function fetchOneAction(fd: FormData) {
   const r = await refreshVideo(id.parse(fd.get("id")), "FETCH", me.id);
   await log(me.email, "VIEWS_FETCH_ONE", r);
   back(
-    "/admin/videos?status=TRACKING",
+    `/admin/videos?status=${r === "final" || r === "nobase" || r === "closed" ? "COMPLETED" : "TRACKING"}`,
     {
       ok: "Actual views fetched (information only, no payment).",
       final:
@@ -149,7 +179,7 @@ export async function fetchOneAction(fd: FormData) {
       closed:
         "Tracking is closed for this video (final views already saved). Correct the views manually if needed.",
       nodata:
-        "Could not fetch views (API not set up for this platform, or the video is private). Enter views manually.",
+        "Fetching failed: the reason is shown under the video (Fetch status). You can enter the views manually.",
       notapproved: "This video is not approved.",
     }[r],
   );

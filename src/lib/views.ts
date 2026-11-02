@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { getVideoInfo } from "./providers";
+import { FetchError, getVideoInfo } from "./providers";
 import { istDay } from "./week";
 
 /** Adjusted (payable) views drive earnings: earned = (new - old views) / 1,000,000 x CURRENT Rs-per-million rate (rate snapshot kept per row).
@@ -113,21 +113,36 @@ export async function refreshVideo(
   const v = await db.video.findUnique({ where: { id: videoId } });
   if (!v || v.status !== "APPROVED") return "notapproved";
   if (v.frozen) return "closed";
-  const info = await getVideoInfo(v.platform, v.url).catch(() => null);
-  if (!info || info.views === undefined) return "nodata";
   const now = new Date();
+  let info;
+  try {
+    info = await getVideoInfo(v.platform, v.url);
+  } catch (e) {
+    // the reason is shown on the Videos page (Fetch status)
+    const reason = e instanceof FetchError ? e.message : "unexpected error while fetching";
+    await db.video.update({
+      where: { id: videoId },
+      data: { fetchStatus: "FAILED", fetchError: reason.slice(0, 300), fetchTriedAt: now },
+    });
+    return "nodata";
+  }
+  const views = info.views!;
   const final = v.trackEndsAt <= now;
-  // the starting point can only be taken while the video is tracking (never at the end: that would make the gain 0)
+  // INITIAL views can only be taken while the video is tracking (never at the end: that would make the difference 0)
   const takeBase = v.baseViews === null && !final;
   await db.video.update({
     where: { id: videoId },
     data: {
-      liveViews: info.views,
+      liveViews: views,
       likes: info.likes ?? v.likes,
       comments: info.comments ?? v.comments,
       lastFetchedAt: now,
-      ...(takeBase ? { baseViews: info.views, baseAt: now } : {}),
-      ...(final ? { frozen: true } : {}),
+      fetchStatus: "OK",
+      fetchError: null,
+      fetchTriedAt: now,
+      ...(takeBase ? { baseViews: views, baseAt: now, baseManual: false } : {}),
+      // 7-DAY views: the first successful fetch after the 168 hours; then fetching stops
+      ...(final ? { finalViews: views, finalAt: now, finalManual: false, frozen: true } : {}),
     },
   });
   await recordStat(videoId);

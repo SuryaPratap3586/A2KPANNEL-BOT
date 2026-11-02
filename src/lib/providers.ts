@@ -45,17 +45,37 @@ export function parseCount(v: unknown): number | undefined {
   return Number.isFinite(n) ? Math.round(n) : undefined;
 }
 
-async function youtube(url: string): Promise<VideoInfo | null> {
+/** A failed fetch with a reason an admin can understand (never contains keys or tokens). */
+export class FetchError extends Error {}
+const fail = (reason: string): never => {
+  throw new FetchError(reason);
+};
+/** Network call with a readable error: "timeout after 20 s" / "network error". */
+async function call(url: string, init?: RequestInit, ms = 20_000) {
+  try {
+    return await http(url, init, ms);
+  } catch (e: any) {
+    return fail(e?.name === "AbortError" ? `timeout after ${ms / 1000} s` : "network error (provider not reachable)");
+  }
+}
+/** "HTTP 403: quota exceeded" from a provider error body, without echoing the request. */
+async function httpFail(name: string, r: Response): Promise<never> {
+  const j: any = await r.json().catch(() => null);
+  const msg = j?.error?.message ?? j?.error ?? j?.message ?? r.statusText;
+  return fail(`${name} HTTP ${r.status}${msg ? ": " + String(msg).slice(0, 120) : ""}`);
+}
+
+async function youtube(url: string): Promise<VideoInfo> {
   const key = process.env.YOUTUBE_API_KEY;
-  if (!key) return null;
+  if (!key) fail("YOUTUBE_API_KEY is not set");
   const id = new URL(url).searchParams.get("v");
-  if (!id) return null;
-  const r = await http(
-    `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${encodeURIComponent(id)}&key=${key}`,
+  if (!id) fail("no video id in the link");
+  const r = await call(
+    `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${encodeURIComponent(id!)}&key=${key}`,
   );
-  if (!r.ok) return null;
+  if (!r.ok) await httpFail("YouTube API", r);
   const it = (await r.json())?.items?.[0];
-  if (!it) return null;
+  if (!it) fail("video not found (deleted or private)");
   const owners = [lc(it.snippet?.channelId)];
   const cr = await http(
     `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${encodeURIComponent(it.snippet?.channelId ?? "")}&key=${key}`,
@@ -141,20 +161,20 @@ async function rapid(
 ): Promise<VideoInfo | null> {
   const key = process.env.RAPIDAPI_KEY,
     host = process.env.RAPIDAPI_HOST;
-  if (!key || !host || platform !== "INSTAGRAM") return null;
+  if (!key || !host || platform !== "INSTAGRAM") return null; // not configured: Apify is tried
   const path = process.env.RAPIDAPI_PATH || "/post";
   const param = process.env.RAPIDAPI_URL_PARAM || "url";
-  const r = await http(
+  const r = await call(
     `https://${host}${path}?${param}=${encodeURIComponent(url)}`,
     { headers: { "x-rapidapi-key": key, "x-rapidapi-host": host } },
     25_000,
   );
   debug("rapidapi status", r.status);
-  if (!r.ok) return null;
+  if (!r.ok) await httpFail("RapidAPI", r);
   const j = await r.json().catch(() => null);
   const root = j?.data ?? j?.result ?? j;
   const item = Array.isArray(root) ? root[0] : (root?.items?.[0] ?? root);
-  if (!item) return null;
+  if (!item) fail("RapidAPI returned no post (private or deleted?)");
   debug("rapidapi fields", Object.keys(flat(item)).slice(0, 80));
   return mapItem(item);
 }
@@ -162,9 +182,9 @@ async function rapid(
 async function apify(
   platform: Platform,
   url: string,
-): Promise<VideoInfo | null> {
+): Promise<VideoInfo> {
   const token = process.env.APIFY_TOKEN;
-  if (!token) return null;
+  if (!token) fail("APIFY_TOKEN is not set");
   const ig = platform === "INSTAGRAM";
   const actor =
     (ig
@@ -178,8 +198,13 @@ async function apify(
     (ig
       ? '{"directUrls":["{{url}}"],"resultsType":"posts","resultsLimit":1}'
       : '{"startUrls":["{{url}}"]}');
-  const input = JSON.parse(tpl.replace(/\{\{url\}\}/g, url));
-  const r = await http(
+  let input: unknown;
+  try {
+    input = JSON.parse(tpl.replace(/\{\{url\}\}/g, url));
+  } catch {
+    fail(`APIFY_${ig ? "INSTAGRAM" : "FACEBOOK"}_INPUT is not valid JSON`);
+  }
+  const r = await call(
     `https://api.apify.com/v2/acts/${actor}/run-sync-get-dataset-items?timeout=60&memory=1024`,
     {
       method: "POST",
@@ -192,18 +217,29 @@ async function apify(
     75_000,
   );
   debug("apify status", r.status);
-  if (!r.ok) return null;
-  const items = await r.json();
-  return Array.isArray(items) && items.length ? mapItem(items[0]) : null;
+  if (!r.ok) await httpFail("Apify", r);
+  const items = await r.json().catch(() => null);
+  if (!Array.isArray(items) || !items.length)
+    fail("Apify returned no data (private, deleted or not supported by the actor)");
+  return mapItem(items[0]);
 }
 
+/** Owner + views / likes / comments of one video. Throws FetchError with the reason when it cannot be fetched. */
 export async function getVideoInfo(
   platform: Platform,
   url: string,
-): Promise<VideoInfo | null> {
-  if (platform === "YOUTUBE") return youtube(url);
-  if (platform === "INSTAGRAM")
-    return (await rapid(platform, url)) ?? apify(platform, url);
-  if (platform === "FACEBOOK") return apify(platform, url);
-  return null; // ShareChat / Moj / TikTok / Other: admin types views
+): Promise<VideoInfo> {
+  let info: VideoInfo;
+  if (platform === "YOUTUBE") info = await youtube(url);
+  else if (platform === "INSTAGRAM") {
+    let first = "";
+    const r = await rapid(platform, url).catch((e) => {
+      first = e instanceof FetchError ? e.message : "RapidAPI failed";
+      return null;
+    });
+    info = r ?? (await apify(platform, url).catch((e) => fail(first ? `${first}; then ${e.message}` : e.message)));
+  } else if (platform === "FACEBOOK") info = await apify(platform, url);
+  else return fail(`no automatic view fetching for ${platform}: enter the views manually`);
+  if (info.views === undefined) fail("the provider answered but sent no view count");
+  return info;
 }

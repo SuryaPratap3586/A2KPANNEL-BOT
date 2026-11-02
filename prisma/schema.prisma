@@ -152,6 +152,13 @@ model Video {
   lastFetchedAt DateTime?
   baseViews     Int? // live views when the 7 days started (first fetch after approval): only views gained AFTER it are counted
   baseAt        DateTime?
+  baseManual    Boolean        @default(false) // initial views typed by an admin (fetch failed)
+  finalViews    Int? // 7-DAY views: fetched (or typed) once the 168 hours are over. Difference = finalViews - baseViews
+  finalAt       DateTime?
+  finalManual   Boolean        @default(false) // 7-day views typed by an admin (fetch failed)
+  fetchStatus   String? // result of the last fetch try: OK | FAILED
+  fetchError    String? // reason of the last failed fetch (shown to the admin)
+  fetchTriedAt  DateTime? // time of the last fetch try (success or failure)
   earnings      Decimal        @default(0) @db.Decimal(14, 2)
   createdAt     DateTime       @default(now())
   history       ViewHistory[]
