@@ -86,45 +86,6 @@ const EN = {
   submitted: "Video submitted for review.",
   unverifiedNote:
     "Video submitted. The account could not be checked automatically, admin will verify it.",
-<<<<<<< HEAD
-  completedVideos: "Completed (7 days)",
-  dayOf: "Day {d} of 7",
-  sevenDone: "7 days completed ✓",
-  viewsNote:
-    "A video is tracked for 7 days from the day it is approved. Its views and earnings are counted after the 7 days are complete.",
-  submittedOn: "Submitted {d}",
-  approvedOn: "Approved {d}",
-<<<<<<< HEAD
-  trackStartOn: "Tracking start {d}",
-  trackEndOn: "Tracking end {d}",
-  viaBot: "via bot",
-  viaApp: "via app",
-  ts_PENDING_APPROVAL: "Pending Approval",
-  ts_TRACKING: "Tracking in Progress",
-  ts_COMPLETED: "7 Days Completed",
-  ts_REJECTED: "Rejected",
-  eligibleViews: "Eligible views",
-  payment: "Payment",
-  notFinal: "Final after {d}",
-  loading: "Loading…",
-<<<<<<< HEAD
-  waitingAdmin: "Payable views not entered by admin yet",
-<<<<<<< HEAD
-  choosePlatform: "Choose platform",
-  usernamePh: "Username (e.g. @xyz)",
-  needAccountFor: "Add a {p} account in Accounts and get it approved first.",
-  e_platform: "Only Instagram, YouTube, Moj and Facebook are accepted.",
-  e_needUser: "Enter the username the video was posted from, like @xyz.",
-  e_userNotLinked: "This username is not one of your approved accounts on this platform.",
-  botNeedUser: "Send the video link and the username together, for example:\nhttps://www.instagram.com/reel/ABC123/ @yourname",
-=======
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-=======
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
-=======
->>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
-=======
->>>>>>> parent of 382de6e (Limit bloggers to 4 platforms; require link and username to submit)
   totalViews: "Total views (paid on)",
   actualViews: "Actual views (platform)",
   adjustedViews: "Adjusted views (paid on)",
@@ -137,15 +98,7 @@ const EN = {
   dayWise: "Day-wise (7 days)",
   date: "Date",
   closedNote:
-<<<<<<< HEAD
-<<<<<<< HEAD
-    "Submit Monday to Friday. Each video is tracked for 168 hours from the time it is approved.",
-=======
     "Submit Monday to Friday. Views are counted until Saturday 11:59 PM.",
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-=======
-    "Submit Monday to Friday. Each video is tracked for 7 days from the day it is approved.",
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
   edited: "edited by admin",
   pasteLink: "Send a video link here to submit it, or open the app.",
   e_minAmt: "Amount is below the minimum.",
@@ -238,45 +191,6 @@ const HI: typeof EN = {
   submitted: "वीडियो रिव्यू के लिए सबमिट हो गया।",
   unverifiedNote:
     "वीडियो सबमिट हो गया। अकाउंट अपने-आप जांचा नहीं जा सका, एडमिन जांचेगा।",
-<<<<<<< HEAD
-  completedVideos: "पूरे हुए (7 दिन)",
-  dayOf: "दिन {d} / 7",
-  sevenDone: "7 दिन पूरे ✓",
-  viewsNote:
-    "वीडियो अप्रूव होने के दिन से 7 दिन गिने जाते हैं। उसके व्यूज़ और कमाई 7 दिन पूरे होने के बाद गिनी जाती है।",
-  submittedOn: "सबमिट {d}",
-  approvedOn: "अप्रूव {d}",
-<<<<<<< HEAD
-  trackStartOn: "ट्रैकिंग शुरू {d}",
-  trackEndOn: "ट्रैकिंग खत्म {d}",
-  viaBot: "बॉट से",
-  viaApp: "ऐप से",
-  ts_PENDING_APPROVAL: "अप्रूवल बाकी",
-  ts_TRACKING: "ट्रैकिंग चल रही है",
-  ts_COMPLETED: "7 दिन पूरे",
-  ts_REJECTED: "रिजेक्टेड",
-  eligibleViews: "मान्य व्यूज़",
-  payment: "पेमेंट",
-  notFinal: "{d} के बाद फाइनल",
-  loading: "लोड हो रहा है…",
-<<<<<<< HEAD
-  waitingAdmin: "एडमिन ने अभी पेमेंट वाले व्यूज़ दर्ज नहीं किए",
-<<<<<<< HEAD
-  choosePlatform: "प्लेटफॉर्म चुनें",
-  usernamePh: "यूज़रनेम (जैसे @xyz)",
-  needAccountFor: "पहले Accounts में {p} अकाउंट जोड़ें और अप्रूव करवाएं।",
-  e_platform: "सिर्फ Instagram, YouTube, Moj और Facebook स्वीकार हैं।",
-  e_needUser: "जिस यूज़रनेम से वीडियो पोस्ट हुआ वह लिखें, जैसे @xyz।",
-  e_userNotLinked: "यह यूज़रनेम इस प्लेटफॉर्म पर आपके अप्रूव्ड अकाउंट में नहीं है।",
-  botNeedUser: "वीडियो लिंक और यूज़रनेम एक साथ भेजें, जैसे:\nhttps://www.instagram.com/reel/ABC123/ @yourname",
-=======
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-=======
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
-=======
->>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
-=======
->>>>>>> parent of 382de6e (Limit bloggers to 4 platforms; require link and username to submit)
   totalViews: "कुल व्यूज़ (इन पर पेमेंट)",
   actualViews: "असली व्यूज़ (प्लेटफॉर्म)",
   adjustedViews: "एडजस्टेड व्यूज़ (इन पर पेमेंट)",
@@ -289,15 +203,7 @@ const HI: typeof EN = {
   dayWise: "दिन-वार (7 दिन)",
   date: "तारीख",
   closedNote:
-<<<<<<< HEAD
-<<<<<<< HEAD
-    "सोमवार से शुक्रवार तक सबमिट करें। हर वीडियो अप्रूव होने के समय से 168 घंटे ट्रैक होता है।",
-=======
     "सोमवार से शुक्रवार तक सबमिट करें। व्यूज़ शनिवार रात 11:59 तक गिने जाते हैं।",
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-=======
-    "सोमवार से शुक्रवार तक सबमिट करें। हर वीडियो के 7 दिन अप्रूव होने के दिन से गिने जाते हैं।",
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
   edited: "एडमिन ने बदला",
   pasteLink: "वीडियो सबमिट करने के लिए लिंक यहां भेजें, या ऐप खोलें।",
   e_minAmt: "राशि न्यूनतम से कम है।",

@@ -2,20 +2,6 @@
 import Script from "next/script";
 import { useState } from "react";
 import { Lang, tr, Key, DICT } from "@/lib/i18n";
-<<<<<<< HEAD
-import { istDateTime } from "@/lib/week";
-<<<<<<< HEAD
-import {
-  BLOGGER_PLATFORMS,
-  accountHasUsername,
-  cleanUsername,
-  normalizeVideoUrl,
-  ownerHint,
-} from "@/lib/platforms";
-=======
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
-=======
->>>>>>> parent of 382de6e (Limit bloggers to 4 platforms; require link and username to submit)
 
 const PLATFORMS = [
   "INSTAGRAM",
@@ -287,73 +273,9 @@ export default function MiniApp() {
                     >
                       {v.url}
                     </div>
-<<<<<<< HEAD
-<<<<<<< HEAD
-                    {/* Timeline: submission, approval, 168-hour tracking window (IST) */}
-                    <div
-                      style={{
-                        fontSize: 12,
-                        opacity: 0.8,
-                        marginTop: 4,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      <div>
-                        <b style={{ color: TONE[v.state] }}>
-                          {t(("ts_" + v.state) as Key)}
-                        </b>
-                        {v.state === "TRACKING"
-                          ? " · " + t("dayOf", { d: v.day })
-=======
-                    {isB && (
-                      <div style={{ fontSize: 12, opacity: 0.7 }}>
-                        {t("submittedOn", { d: v.submittedAt })}
-                        {v.approvedAt
-                          ? " · " + t("approvedOn", { d: v.approvedAt })
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
-                          : ""}
-                      </div>
-                    )}
-                    {v.status === "APPROVED" && isB && (
-                      <div style={{ fontSize: 13, opacity: 0.8 }}>
-                        {v.done ? t("sevenDone") : t("dayOf", { d: v.day })}
-                      </div>
-<<<<<<< HEAD
-                      {v.approvedAt && (
-                        <div>
-                          {t("approvedOn", { d: istDateTime(v.approvedAt) })}
-                        </div>
-                      )}
-                      {v.trackStart && (
-                        <div>
-                          {t("trackStartOn", { d: istDateTime(v.trackStart) })}
-                        </div>
-                      )}
-                      {v.trackEnd && (
-                        <div>
-                          {t("trackEndOn", { d: istDateTime(v.trackEnd) })}
-                        </div>
-                      )}
-                    </div>
-=======
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-                    {v.status === "APPROVED" && !isB && (
-                      <div style={{ fontSize: 13, marginTop: 4 }}>
-                        {v.state === "COMPLETED" ? (
-                          <>
-                            {t("eligibleViews")}:{" "}
-                            <b>{num(v.eligibleViews ?? 0)}</b> · {t("payment")}
-                            : <b>{inr(v.payment ?? 0)}</b>
-                          </>
-                        ) : (
-                          t("notFinal", { d: istDateTime(v.trackEnd) })
-                        )}
-=======
-                    )}
                     {v.status === "APPROVED" && !isB && (
                       <div style={{ fontSize: 13 }}>
                         {t("payViews")}: {num(v.views)}
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
                       </div>
                     )}
                     {v.reason && (

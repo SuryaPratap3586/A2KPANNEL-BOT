@@ -5,21 +5,7 @@ import { agentBalance, bloggerBalance } from "./balance";
 import { MIN_WITHDRAW, getAgentBonus } from "./settings";
 import { ownerHint, normalizeVideoUrl, parseAccount } from "./platforms";
 import { getVideoInfo } from "./providers";
-<<<<<<< HEAD
-<<<<<<< HEAD
-import {
-  submissionOpen,
-  trackDay,
-  trackEnd,
-  trackState,
-  weekStartIST,
-} from "./week";
-=======
 import { submissionOpen, weekStartIST } from "./week";
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-=======
-import { submissionOpen, trackDay, trackEnd, weekStartIST } from "./week";
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 import { randomToken } from "./security";
 import { creditEligible } from "./commission";
 
@@ -241,15 +227,6 @@ export async function submitVideo(
         accountId,
         ownerVerified: verified,
         weekStart: weekStartIST(),
-<<<<<<< HEAD
-<<<<<<< HEAD
-        trackEndsAt: trackEnd(), // placeholder: replaced by approval time + 168 h when the admin approves
-        submittedVia: via,
-=======
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-=======
-        trackEndsAt: trackEnd(),
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
       },
     });
     return { ok: true, unverified: !verified && platform !== "OTHER" };
@@ -343,38 +320,6 @@ export async function requestWithdrawal(
   }
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-/** Timeline of one video (ISO timestamps; the app shows them in IST). Tracking = approval timestamp + exactly 168 hours. */
-const timeline = (
-  v: {
-    status: string;
-    createdAt: Date;
-    reviewedAt: Date | null;
-    trackEndsAt: Date;
-    submittedVia: string;
-  },
-  now: Date,
-) => {
-  const approved = v.status === "APPROVED";
-  const state = trackState(v, now);
-  return {
-    state, // PENDING_APPROVAL | TRACKING | COMPLETED | REJECTED
-    via: v.submittedVia,
-    submittedAt: v.createdAt.toISOString(),
-    approvedAt: approved && v.reviewedAt ? v.reviewedAt.toISOString() : null,
-    trackStart: approved ? (v.reviewedAt ?? v.createdAt).toISOString() : null,
-    trackEnd: approved ? v.trackEndsAt.toISOString() : null,
-    day: trackDay(v.trackEndsAt, now),
-    done: state === "COMPLETED",
-  };
-};
-=======
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-=======
-const istDate = (d: Date) =>
-  new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 const payRow = (w: any) => ({
   id: w.id,
   amount: num(w.amount),
@@ -463,18 +408,6 @@ export async function bloggerData(id: string) {
       url: v.url,
       status: v.status,
       reason: v.rejectReason,
-<<<<<<< HEAD
-<<<<<<< HEAD
-      ...timeline(v, now),
-=======
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-=======
-      day: trackDay(v.trackEndsAt, now),
-      done: v.trackEndsAt <= now,
-      submittedAt: istDate(v.createdAt),
-      approvedAt:
-        v.status === "APPROVED" && v.reviewedAt ? istDate(v.reviewedAt) : null,
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
     })),
     reposts: reposts.map((r) => ({
       id: r.id,
@@ -544,23 +477,6 @@ export async function agentData(id: string) {
       status: v.status,
       views: v.views,
       blogger: v.blogger.name,
-<<<<<<< HEAD
-      ...timeline(v, now),
-<<<<<<< HEAD
-      // Final (eligible) views and payment exist only after the 168 hours AND after the admin entered the payable views
-      eligibleViews:
-        trackState(v, now) === "COMPLETED" && v.viewsEdited ? v.views : null,
-      payment:
-        trackState(v, now) === "COMPLETED" && v.viewsEdited
-          ? num(v.earnings)
-          : null,
-=======
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
-=======
-      // Only videos whose 168 hours are complete have final (eligible) views and payment
-      eligibleViews: trackState(v, now) === "COMPLETED" ? v.views : null,
-      payment: trackState(v, now) === "COMPLETED" ? num(v.earnings) : null,
->>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
     })),
     payments: pays.map(payRow),
   };

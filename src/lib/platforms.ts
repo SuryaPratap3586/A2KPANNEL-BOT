@@ -66,15 +66,7 @@ export function ownerHint(platform: Platform, raw: string): string | null {
   const u = parse(raw); if (!u) return null;
   const p = u.pathname.replace(/\/+$/, "");
   if (platform === "INSTAGRAM") { const m = p.match(/^\/([\w.]+)\/(?:reel|reels|p|tv)\/[\w-]+$/); return m && !IG_RESERVED.has(m[1].toLowerCase()) ? m[1].toLowerCase() : null; }
-<<<<<<< HEAD
-  if (platform === "FACEBOOK") { const m = p.match(/^\/([\w.-]+)\/(?:videos\/(?:[^/]+\/)?|reels?\/)\d+$/); return m && !FB_RESERVED.has(m[1].toLowerCase()) ? m[1].toLowerCase() : null; }
-<<<<<<< HEAD
-  if (platform === "MOJ") { const m = p.match(/^\/@([\w.-]+)\//); return m ? m[1].toLowerCase() : null; }   // mojapp.in/@user/video/...
-=======
   if (platform === "FACEBOOK") { const m = p.match(/^\/([\w.-]+)\/videos\/\d+$/); return m ? m[1].toLowerCase() : null; }
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
-=======
->>>>>>> parent of 382de6e (Limit bloggers to 4 platforms; require link and username to submit)
   return null;
 }
 

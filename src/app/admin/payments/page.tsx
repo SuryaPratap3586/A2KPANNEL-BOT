@@ -12,17 +12,7 @@ export default async function Payments({ searchParams }: { searchParams: { statu
     <div className="card"><table><thead><tr><th>Date</th><th>Who</th><th>Amount ₹</th><th>Pay to</th><th>Status</th><th>Change status</th></tr></thead><tbody>
       {list.map(w => <tr key={w.id}><td>{w.createdAt.toISOString().slice(0, 10)}</td><td>{w.blogger ? "Blogger" : "Agent"}: {w.blogger?.name ?? w.agent?.name}</td><td>{w.amount.toString()}</td><td className="max-w-xs break-words">{w.details}</td><td>{LABEL[w.status]}{w.note ? <div className="text-xs text-slate-500">{w.note}</div> : null}</td>
         <td className="space-y-1"><div className="flex gap-1">
-<<<<<<< HEAD
-<<<<<<< HEAD
-          {(["PROCESSING", "PAID"] as const).filter(s => s !== w.status && w.status !== "PAID" && w.status !== "REJECTED").map(s => <form key={s} action={setPayment}><input type="hidden" name="id" value={w.id} /><input type="hidden" name="status" value={s} /><Btn className={s === "PAID" ? "btn-g" : "btn"}>{LABEL[s]}</Btn></form>)}</div>
-          {w.status !== "REJECTED" && w.status !== "PAID" && <form action={setPayment} className="flex gap-1"><input type="hidden" name="id" value={w.id} /><input type="hidden" name="status" value="REJECTED" /><input name="note" required minLength={2} placeholder="Reject reason" className="inp w-32" /><Btn className="btn-r">Reject</Btn></form>}</td></tr>)}
-=======
           {(["PROCESSING", "PAID"] as const).filter(s => s !== w.status).map(s => <form key={s} action={setPayment}><input type="hidden" name="id" value={w.id} /><input type="hidden" name="status" value={s} /><button className={s === "PAID" ? "btn-g" : "btn"}>{LABEL[s]}</button></form>)}</div>
           {w.status !== "REJECTED" && w.status !== "PAID" && <form action={setPayment} className="flex gap-1"><input type="hidden" name="id" value={w.id} /><input type="hidden" name="status" value="REJECTED" /><input name="note" required minLength={2} placeholder="Reject reason" className="inp w-32" /><button className="btn-r">Reject</button></form>}</td></tr>)}
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-=======
-          {(["PROCESSING", "PAID"] as const).filter(s => s !== w.status && w.status !== "PAID" && w.status !== "REJECTED").map(s => <form key={s} action={setPayment}><input type="hidden" name="id" value={w.id} /><input type="hidden" name="status" value={s} /><button className={s === "PAID" ? "btn-g" : "btn"}>{LABEL[s]}</button></form>)}</div>
-          {w.status !== "REJECTED" && w.status !== "PAID" && <form action={setPayment} className="flex gap-1"><input type="hidden" name="id" value={w.id} /><input type="hidden" name="status" value="REJECTED" /><input name="note" required minLength={2} placeholder="Reject reason" className="inp w-32" /><button className="btn-r">Reject</button></form>}</td></tr>)}
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
     </tbody></table></div></>);
 }

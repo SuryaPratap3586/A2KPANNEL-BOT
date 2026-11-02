@@ -17,19 +17,6 @@ import { getAgentBonus } from "@/lib/settings";
 import { agentBalance } from "@/lib/balance";
 import { creditEligible } from "@/lib/commission";
 import { tgSend } from "@/lib/notify";
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-import { istDateTime, trackEnd } from "@/lib/week";
-=======
-import { trackEnd } from "@/lib/week";
->>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
-import { TARGETS, Target, createBroadcast } from "@/lib/broadcast";
-=======
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-=======
-import { trackEnd } from "@/lib/week";
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 
 const id = z.string().cuid();
 const pw = z
@@ -60,19 +47,9 @@ export async function reviewVideo(fd: FormData) {
       status: decision,
       rejectReason: reason,
       reviewedById: me.id,
-<<<<<<< HEAD
-<<<<<<< HEAD
-      reviewedAt: now,
-      ...(decision === "APPROVED" ? { trackEndsAt: trackEnd(now) } : {}),
-=======
       reviewedAt: new Date(),
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-=======
-      reviewedAt: new Date(),
-      ...(decision === "APPROVED" ? { trackEndsAt: trackEnd() } : {}),
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
     },
-  }); // the 7 days start on the approval day
+  });
   if (u.count === 1) {
     const v = await db.video.findUniqueOrThrow({
       where: { id: vid },
@@ -132,36 +109,6 @@ export async function setViews(fd: FormData) {
   revalidatePath("/admin/videos");
 }
 
-/** Admin types the INITIAL and / or 7-DAY views when fetching failed (or to correct them). These are actual views only:
- *  they never create a payment (payable views are entered separately). 7-day views only after the 168 hours; then fetching stops. */
-export async function setActualViews(fd: FormData) {
-  const me = await requireStaff();
-  const vid = id.parse(fd.get("id"));
-  const count = z.coerce.number().int().min(0).max(2_000_000_000);
-  const opt = (k: string) => {
-    const raw = fd.get(k);
-    return raw === null || raw === "" ? undefined : count.parse(raw);
-  };
-  const initial = opt("initial"),
-    final = opt("final");
-  const back2 = (m: string) => back("/admin/videos?status=" + String(fd.get("tab") ?? "TRACKING"), m);
-  if (initial === undefined && final === undefined) back2("Enter the initial views, the 7-day views, or both.");
-  const v = await db.video.findUnique({ where: { id: vid } });
-  if (!v || v.status !== "APPROVED") back2("This video is not approved.");
-  const now = new Date();
-  if (final !== undefined && v!.trackEndsAt > now)
-    back2(`7-day views can be entered after the 168 hours are complete (${istDateTime(v!.trackEndsAt)} IST).`);
-  await db.video.update({
-    where: { id: vid },
-    data: {
-      ...(initial !== undefined ? { baseViews: initial, baseAt: now, baseManual: true } : {}),
-      ...(final !== undefined ? { finalViews: final, finalAt: now, finalManual: true, frozen: true } : {}),
-    },
-  });
-  await log(me.email, "VIEWS_ACTUAL_MANUAL", `${vid}${initial !== undefined ? " initial=" + initial : ""}${final !== undefined ? " 7day=" + final : ""}`);
-  back2("Actual views saved." + (final !== undefined ? " Now check the difference and enter the payable views." : ""));
-}
-
 export async function resetToLiveAction(fd: FormData) {
   // go back to the live (fetched) views
   const me = await requireStaff();
@@ -177,35 +124,13 @@ export async function fetchOneAction(fd: FormData) {
   const r = await refreshVideo(id.parse(fd.get("id")), "FETCH", me.id);
   await log(me.email, "VIEWS_FETCH_ONE", r);
   back(
-<<<<<<< HEAD
-    `/admin/videos?status=${r === "final" || r === "nobase" || r === "closed" ? "COMPLETED" : "TRACKING"}`,
-=======
     "/admin/videos?status=APPROVED",
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
     {
-<<<<<<< HEAD
-<<<<<<< HEAD
-      ok: "Actual views fetched (information only, no payment).",
-=======
-      ok: "Live views fetched. Money is calculated only at the final fetch, after the 168 hours.",
->>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
-      final:
-        "Final views fetched: gained views and earnings are saved, tracking is closed.",
-      nobase:
-        "Final views fetched, but the starting views were never fetched, so the gain is unknown. Enter the views manually.",
-      closed:
-<<<<<<< HEAD
-        "Tracking is closed for this video (final views already saved). Correct the views manually if needed.",
-=======
-        "Tracking is closed for this video (its week ended Saturday 11:59 PM).",
->>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
-=======
       ok: "Views fetched.",
       closed:
-        "Tracking is closed for this video (its 168 hours are over).",
->>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
+        "Tracking is closed for this video (its week ended Saturday 11:59 PM).",
       nodata:
-        "Fetching failed: the reason is shown under the video (Fetch status). You can enter the views manually.",
+        "Could not fetch views (API not set up for this platform, or the video is private). Enter views manually.",
       notapproved: "This video is not approved.",
     }[r],
   );
@@ -217,19 +142,8 @@ export async function fetchAllAction() {
   const r = await fetchAll(me.id, 45_000);
   await log(me.email, "VIEWS_FETCH_ALL", `${r.updated}/${r.tried}`);
   back(
-<<<<<<< HEAD
-    "/admin/videos?status=TRACKING",
-<<<<<<< HEAD
-    r.tried
-      ? `Fetched ${r.updated} of ${r.tried} due videos.${r.remaining ? ` ${r.remaining} more are left, press again.` : ""} Videos without auto data need manual views.`
-      : "Nothing is due: no video needs its starting or final views right now.",
-=======
     "/admin/videos?status=APPROVED",
     `Fetched ${r.updated} of ${r.tried} videos.${r.remaining ? ` ${r.remaining} more are left, press again.` : ""} Videos without auto data need manual views.`,
->>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
-=======
-    `Fetched ${r.updated} of ${r.tried} videos.${r.remaining ? ` ${r.remaining} more are left, press again.` : ""} Videos without auto data need manual views.`,
->>>>>>> parent of f2c3802 (Fetch views only at approval and after 168 hours; auto earnings on gain)
   );
 }
 
