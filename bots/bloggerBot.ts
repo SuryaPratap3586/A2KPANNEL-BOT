@@ -1,11 +1,7 @@
 import { Telegraf, Markup } from "telegraf";
 import { db } from "../src/lib/db";
-import {
-  registerBlogger,
-  setLang,
-  submitVideoByUsername,
-} from "../src/lib/services";
-import { detectPlatform, isBloggerPlatform } from "../src/lib/platforms";
+import { registerBlogger, setLang, submitVideo } from "../src/lib/services";
+import { detectPlatform } from "../src/lib/platforms";
 import { Lang, tr } from "../src/lib/i18n";
 import {
   background,
@@ -119,8 +115,7 @@ export function bloggerBot(token: string) {
     }),
   );
 
-  // A blogger can also send "<video link> @username" in the chat to submit it (same rules as the app: Instagram / YouTube / Moj / Facebook,
-  // link AND username required, username = an approved account, Mon-Fri, no duplicates)
+  // A blogger can also paste a video link in the chat to submit it (same rules as the app: Mon-Fri, linked account, no duplicates)
   bot.on(
     "text",
     safe(async (ctx) => {
@@ -131,6 +126,7 @@ export function bloggerBot(token: string) {
       if (!m) return ctx.reply(tr(l, "pasteLink"), menu(l));
       const platform = detectPlatform(m[0]);
       if (!platform) return ctx.reply("❌ " + tr(l, "e_badUrl"));
+<<<<<<< HEAD
 <<<<<<< HEAD
       if (!isBloggerPlatform(platform))
         return ctx.reply("❌ " + tr(l, "e_platform"));
@@ -146,6 +142,9 @@ export function bloggerBot(token: string) {
 =======
       const r = await submitVideo(blogger.id, platform, m[0]);
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
+=======
+      const r = await submitVideo(blogger.id, platform, m[0], null, "BOT");
+>>>>>>> parent of 382de6e (Limit bloggers to 4 platforms; require link and username to submit)
       if ("error" in r) return ctx.reply("❌ " + tr(l, r.error));
       await ctx.reply(
         "✅ " + tr(l, r.unverified ? "unverifiedNote" : "submitted"),

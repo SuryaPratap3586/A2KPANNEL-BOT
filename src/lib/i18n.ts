@@ -109,6 +109,7 @@ const EN = {
   loading: "Loading…",
 <<<<<<< HEAD
   waitingAdmin: "Payable views not entered by admin yet",
+<<<<<<< HEAD
   choosePlatform: "Choose platform",
   usernamePh: "Username (e.g. @xyz)",
   needAccountFor: "Add a {p} account in Accounts and get it approved first.",
@@ -122,6 +123,8 @@ const EN = {
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 =======
 >>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
+=======
+>>>>>>> parent of 382de6e (Limit bloggers to 4 platforms; require link and username to submit)
   totalViews: "Total views (paid on)",
   actualViews: "Actual views (platform)",
   adjustedViews: "Adjusted views (paid on)",
@@ -144,8 +147,7 @@ const EN = {
     "Submit Monday to Friday. Each video is tracked for 7 days from the day it is approved.",
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
   edited: "edited by admin",
-  pasteLink:
-    "To submit a video send the link and your username together (e.g. https://youtube.com/shorts/... @yourname), or open the app.",
+  pasteLink: "Send a video link here to submit it, or open the app.",
   e_minAmt: "Amount is below the minimum.",
   e_low: "Insufficient balance.",
   e_failed: "Something went wrong.",
@@ -259,6 +261,7 @@ const HI: typeof EN = {
   loading: "लोड हो रहा है…",
 <<<<<<< HEAD
   waitingAdmin: "एडमिन ने अभी पेमेंट वाले व्यूज़ दर्ज नहीं किए",
+<<<<<<< HEAD
   choosePlatform: "प्लेटफॉर्म चुनें",
   usernamePh: "यूज़रनेम (जैसे @xyz)",
   needAccountFor: "पहले Accounts में {p} अकाउंट जोड़ें और अप्रूव करवाएं।",
@@ -272,6 +275,8 @@ const HI: typeof EN = {
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
 =======
 >>>>>>> parent of f7f844d (Pay only on admin-entered payable views; fetched views are actual views)
+=======
+>>>>>>> parent of 382de6e (Limit bloggers to 4 platforms; require link and username to submit)
   totalViews: "कुल व्यूज़ (इन पर पेमेंट)",
   actualViews: "असली व्यूज़ (प्लेटफॉर्म)",
   adjustedViews: "एडजस्टेड व्यूज़ (इन पर पेमेंट)",
@@ -294,8 +299,7 @@ const HI: typeof EN = {
     "सोमवार से शुक्रवार तक सबमिट करें। हर वीडियो के 7 दिन अप्रूव होने के दिन से गिने जाते हैं।",
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
   edited: "एडमिन ने बदला",
-  pasteLink:
-    "वीडियो सबमिट करने के लिए लिंक और यूज़रनेम एक साथ भेजें (जैसे https://youtube.com/shorts/... @yourname), या ऐप खोलें।",
+  pasteLink: "वीडियो सबमिट करने के लिए लिंक यहां भेजें, या ऐप खोलें।",
   e_minAmt: "राशि न्यूनतम से कम है।",
   e_low: "बैलेंस कम है।",
   e_failed: "कुछ गलत हो गया।",

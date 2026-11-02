@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Lang, tr, Key, DICT } from "@/lib/i18n";
 <<<<<<< HEAD
 import { istDateTime } from "@/lib/week";
+<<<<<<< HEAD
 import {
   BLOGGER_PLATFORMS,
   accountHasUsername,
@@ -13,114 +14,18 @@ import {
 } from "@/lib/platforms";
 =======
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
+=======
+>>>>>>> parent of 382de6e (Limit bloggers to 4 platforms; require link and username to submit)
 
-// Bloggers can use these platforms only
-const PLATFORMS = BLOGGER_PLATFORMS;
-const PNAME: Record<string, string> = {
-  INSTAGRAM: "Instagram",
-  YOUTUBE: "YouTube",
-  MOJ: "Moj",
-  FACEBOOK: "Facebook",
-};
-type T = (k: Key, v?: Record<string, string | number>) => string;
-
-/** Video submission: platform + username (@xyz) + video link are all required and checked while typing
- *  (same rules as the server). Submit is enabled only when everything is correct. */
-function SubmitVideo({
-  d,
-  t,
-  act,
-  inp,
-  btn,
-}: {
-  d: any;
-  t: T;
-  act: (body: Record<string, unknown>, ok?: Key) => Promise<boolean>;
-  inp: React.CSSProperties;
-  btn: React.CSSProperties;
-}) {
-  const [platform, setPlatform] = useState("");
-  const [user, setUser] = useState("");
-  const [url, setUrl] = useState("");
-  const approved = d.accounts.filter(
-    (a: any) => a.status === "APPROVED" && a.platform === platform,
-  );
-  const hasAccount = !platform || approved.length > 0;
-  const clean = cleanUsername(user);
-  const userOk =
-    !!clean && approved.some((a: any) => accountHasUsername(a, clean));
-  const canon = platform ? normalizeVideoUrl(platform as any, url) : null;
-  const owner = canon ? ownerHint(platform as any, url) : null;
-  const linkOk = !!canon && (!owner || !clean || owner === clean);
-  const ready = d.submitOpen && !!platform && hasAccount && userOk && linkOk;
-  const hint = (s: string) => (
-    <div style={{ fontSize: 12, color: "#c53030", margin: "-2px 0 6px" }}>
-      {s}
-    </div>
-  );
-  return (
-    <>
-      <select
-        style={inp}
-        value={platform}
-        onChange={(e) => setPlatform(e.target.value)}
-        required
-      >
-        <option value="" disabled>
-          {t("choosePlatform")} *
-        </option>
-        {PLATFORMS.map((p) => (
-          <option key={p} value={p}>
-            {PNAME[p]}
-          </option>
-        ))}
-      </select>
-      {platform && !hasAccount && hint(t("needAccountFor", { p: PNAME[platform] }))}
-      <input
-        style={inp}
-        value={user}
-        onChange={(e) => setUser(e.target.value)}
-        placeholder={t("usernamePh") + " *"}
-        list="myusers"
-        autoCapitalize="none"
-        autoCorrect="off"
-        required
-      />
-      <datalist id="myusers">
-        {approved.map((a: any) => (
-          <option key={a.id} value={a.label.startsWith("@") ? a.label : "@" + a.label} />
-        ))}
-      </datalist>
-      {user && !clean && hint(t("e_needUser"))}
-      {platform && hasAccount && clean && !userOk && hint(t("e_userNotLinked"))}
-      <input
-        style={inp}
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        placeholder={t("link") + " *"}
-        inputMode="url"
-        autoCapitalize="none"
-        required
-      />
-      {url && platform && !canon && hint(t("e_badUrl"))}
-      {canon && !linkOk && hint(t("e_notLinked"))}
-      <button
-        style={{ ...btn, opacity: ready ? 1 : 0.45 }}
-        disabled={!ready}
-        onClick={async () => {
-          if (!ready) return;
-          const ok = await act(
-            { action: "submitVideo", platform, username: user, url },
-            "submitted",
-          );
-          if (ok) setUrl(""); // keep platform + username for the next video
-        }}
-      >
-        {t("submit")}
-      </button>
-    </>
-  );
-}
+const PLATFORMS = [
+  "INSTAGRAM",
+  "FACEBOOK",
+  "YOUTUBE",
+  "SHARECHAT",
+  "MOJ",
+  "TIKTOK",
+  "OTHER",
+];
 const tr_keys = DICT.EN;
 const inr = (n: number) =>
   "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -173,9 +78,7 @@ export default function MiniApp() {
   }
   const act = async (body: Record<string, unknown>, ok: Key = "done") => {
     setMsg("");
-    const good = await call(body);
-    if (good) setMsg("✅ " + t(ok));
-    return good;
+    if (await call(body)) setMsg("✅ " + t(ok));
   };
   const boot = () => {
     const tg = (window as any).Telegram?.WebApp;
@@ -315,7 +218,46 @@ export default function MiniApp() {
                     {d.submitOpen ? t("closedNote") : "🔒 " + t("e_closed")}
                   </p>
                   {d.accounts.some((a: any) => a.status === "APPROVED") ? (
-                    <SubmitVideo d={d} t={t} act={act} inp={inp} btn={btn} />
+                    <>
+                      <select id="vacc" style={inp}>
+                        {d.accounts
+                          .filter((a: any) => a.status === "APPROVED")
+                          .map((a: any) => (
+                            <option key={a.id} value={a.id}>
+                              {a.platform} · {a.label}
+                            </option>
+                          ))}
+                      </select>
+                      <input
+                        id="vu"
+                        style={inp}
+                        placeholder={t("link")}
+                        inputMode="url"
+                      />
+                      <button
+                        style={btn}
+                        onClick={() => {
+                          const u = document.getElementById(
+                            "vu",
+                          ) as HTMLInputElement;
+                          act(
+                            {
+                              action: "submitVideo",
+                              accountId: (
+                                document.getElementById(
+                                  "vacc",
+                                ) as HTMLSelectElement
+                              ).value,
+                              url: u.value,
+                            },
+                            "submitted",
+                          );
+                          u.value = "";
+                        }}
+                      >
+                        {t("submit")}
+                      </button>
+                    </>
                   ) : (
                     <p style={{ margin: 0 }}>{t("e_needAccount")}</p>
                   )}
@@ -451,9 +393,7 @@ export default function MiniApp() {
               <div style={box}>
                 <select id="ap" style={inp}>
                   {PLATFORMS.map((p) => (
-                    <option key={p} value={p}>
-                      {PNAME[p]}
-                    </option>
+                    <option key={p}>{p}</option>
                   ))}
                 </select>
                 <input

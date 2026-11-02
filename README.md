@@ -90,6 +90,7 @@ A blogger can only submit videos of his **approved linked accounts**. YouTube: c
 - **Instagram:** `/reel/`, `/reels/`, `/p/`, `/tv/`, `/<user>/reel/`, new `/share/…` links; tracking params removed.
 <<<<<<< HEAD
 - **Facebook:** `/reel/ID`, `/<page>/reel/ID`, `/share/r|v|p/…`, `/watch/?v=`, `/…/videos/ID`, `/…/videos/<title>/ID`, `fb.watch/…`.
+<<<<<<< HEAD
 - **Moj:** `mojapp.in/@user/video/…` (accounts: `mojapp.in/@user`).
 - Bloggers can use **Instagram, YouTube, Moj and Facebook only** (ShareChat, TikTok and Other are no longer accepted; old records stay).
 - **Every submission needs the video link AND the username it was posted from** (YouTube `@xyz`, Instagram `@abc`, …). The username must be one of the blogger's approved accounts on that platform; a link that names its owner must name the same user. In the app Submit is enabled only when platform, username and link are all correct; in the bot send `<link> @username`.
@@ -97,6 +98,9 @@ A blogger can only submit videos of his **approved linked accounts**. YouTube: c
 - **Facebook:** `/reel/ID`, `/share/r|v|p/…`, `/watch/?v=`, `/…/videos/ID`, `fb.watch/…`.
 - Also ShareChat, Moj, TikTok, Other (https + domain check).
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
+=======
+- Also ShareChat, Moj, TikTok, Other (https + domain check).
+>>>>>>> parent of 382de6e (Limit bloggers to 4 platforms; require link and username to submit)
 - All three now count a view when playback starts (YouTube: Shorts since 31 Mar 2025, all formats from 24 Aug 2026 per reports; Instagram: "Views" replaced Plays/Impressions in Apr 2025; Facebook Page Insights dropped Impressions in Nov 2025). Pay is per "views", so numbers are comparable across platforms.
 - Auto view fetch: **YouTube** with `YOUTUBE_API_KEY`. Instagram/Facebook don't expose public view counts through an official API without the owner's login, so use a data provider in `src/lib/views.ts` or edit views in Admin → Videos.
 - Instagram "repost" feature: reposted videos belong to someone else; reject them in moderation if you don't want them.

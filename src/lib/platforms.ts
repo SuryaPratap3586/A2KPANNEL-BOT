@@ -1,4 +1,4 @@
-import type { Platform } from "@prisma/client"; // type only: this file is also used by the Mini App in the browser
+import { Platform } from "@prisma/client";
 
 const HOSTS: Record<Platform, string[]> = {
   INSTAGRAM: ["instagram.com"],
@@ -7,27 +7,6 @@ const HOSTS: Record<Platform, string[]> = {
   SHARECHAT: ["sharechat.com"], MOJ: ["mojapp.in", "moj.app", "mojapp.com"], TIKTOK: ["tiktok.com"], OTHER: [],
 };
 export const PLATFORMS = Object.keys(HOSTS) as Platform[];
-/** The only platforms bloggers can add accounts for and submit videos from (old records of other platforms stay as they are). */
-export const BLOGGER_PLATFORMS = ["INSTAGRAM", "YOUTUBE", "MOJ", "FACEBOOK"] as const satisfies readonly Platform[];
-export type BloggerPlatform = (typeof BLOGGER_PLATFORMS)[number];
-export const isBloggerPlatform = (p: string): p is BloggerPlatform => (BLOGGER_PLATFORMS as readonly string[]).includes(p);
-
-/** "@xyz" / "xyz" -> "xyz" (lowercase), or null when it is not a valid username / handle / page name / numeric id. */
-export function cleanUsername(raw: string): string | null {
-  const s = raw.trim().replace(/^@/, "").toLowerCase();
-  return /^[a-z0-9._-]{2,50}$/.test(s) ? s : null;
-}
-/** Does the typed username belong to this approved account? Compared with the saved ref and with the profile link. */
-export function accountHasUsername(a: { ref: string | null; url: string }, username: string): boolean {
-  const u = cleanUsername(username);
-  if (!u) return false;
-  const names = new Set<string>();
-  if (a.ref) names.add(a.ref.replace(/^@/, "").toLowerCase());
-  try {
-    for (const seg of new URL(a.url).pathname.split("/").filter(Boolean)) names.add(decodeURIComponent(seg).replace(/^@/, "").toLowerCase());
-  } catch {}
-  return names.has(u);
-}
 const TRACK = /^(utm_.*|igsh|igshid|fbclid|si|feature|pp|mibextid|rdid|share_url)$/i;
 const IG_RESERVED = new Set(["reel", "reels", "p", "tv", "stories", "explore", "accounts", "direct", "about", "share"]);
 const FB_RESERVED = new Set(["reel", "reels", "watch", "share", "videos", "groups", "pages", "people", "login", "photo", "hashtag", "marketplace", "events", "stories", "gaming", "help", "permalink.php"]);
@@ -89,10 +68,13 @@ export function ownerHint(platform: Platform, raw: string): string | null {
   if (platform === "INSTAGRAM") { const m = p.match(/^\/([\w.]+)\/(?:reel|reels|p|tv)\/[\w-]+$/); return m && !IG_RESERVED.has(m[1].toLowerCase()) ? m[1].toLowerCase() : null; }
 <<<<<<< HEAD
   if (platform === "FACEBOOK") { const m = p.match(/^\/([\w.-]+)\/(?:videos\/(?:[^/]+\/)?|reels?\/)\d+$/); return m && !FB_RESERVED.has(m[1].toLowerCase()) ? m[1].toLowerCase() : null; }
+<<<<<<< HEAD
   if (platform === "MOJ") { const m = p.match(/^\/@([\w.-]+)\//); return m ? m[1].toLowerCase() : null; }   // mojapp.in/@user/video/...
 =======
   if (platform === "FACEBOOK") { const m = p.match(/^\/([\w.-]+)\/videos\/\d+$/); return m ? m[1].toLowerCase() : null; }
 >>>>>>> parent of 20922ca (Add 168-hour tracking timelines, broadcast, Facebook links and faster admin)
+=======
+>>>>>>> parent of 382de6e (Limit bloggers to 4 platforms; require link and username to submit)
   return null;
 }
 
@@ -118,10 +100,6 @@ export function parseAccount(platform: Platform, raw: string): { url: string; re
     const s = segs[0]?.toLowerCase();
     if (!s || !/^[a-z0-9.\-]{3,}$/.test(s) || FB_RESERVED.has(s)) return null;
     return { url: `https://www.facebook.com/${s}`, ref: s };
-  }
-  if (platform === "MOJ") {                                           // mojapp.in/@username
-    const m = (segs[0] ?? "").match(/^@([\w.-]{2,})$/);
-    return m ? { url: `https://mojapp.in/@${m[1].toLowerCase()}`, ref: m[1].toLowerCase() } : null;
   }
   for (const k of [...u.searchParams.keys()]) if (TRACK.test(k)) u.searchParams.delete(k);
   if (u.pathname.length < 2) return null;
