@@ -1,12 +1,18 @@
+<<<<<<< HEAD
 import type { Prisma } from "@prisma/client";
 import Btn from "@/app/admin/Btn";
 import { db } from "@/lib/db";
 import { pageStaff } from "@/lib/auth";
 import { istDateTime, trackState } from "@/lib/week";
+=======
+import { db } from "@/lib/db";
+import { pageStaff } from "@/lib/auth";
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
 import PlanBadge from "../PlanBadge";
 import { reviewVideo, fetchAllAction } from "../actions";
 import VideoCard from "./VideoCard";
 export const dynamic = "force-dynamic";
+<<<<<<< HEAD
 
 // Every approved video has its OWN 168 hours (from the approval time). While they run, the video is in "Tracking";
 // when they are over it moves to "Completed". Views: INITIAL (fetched at approval) and 7-DAY (fetched after the 168 hours),
@@ -25,6 +31,9 @@ const LABEL: Record<(typeof TABS)[number], string> = {
   REJECTED: "Rejected",
   REPOSTS: "Reposts",
 };
+=======
+const TABS = ["PENDING", "APPROVED", "REJECTED", "REPOSTS"] as const;
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
 const REASONS = [
   "Wrong Logo",
   "Bad Quality",
@@ -37,6 +46,7 @@ const REASONS = [
   "Account not linked",
 ];
 const fmt = (n: number) => n.toLocaleString("en-IN");
+<<<<<<< HEAD
 const STATE: Record<string, [string, string]> = {
   PENDING_APPROVAL: ["Pending Approval", "text-amber-700"],
   TRACKING: ["Tracking in Progress", "text-blue-700"],
@@ -75,6 +85,8 @@ function Timeline({ v, now }: { v: TimelineV; now: Date }) {
     </div>
   );
 }
+=======
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
 
 // Visible to every admin: all bloggers' videos, approve/reject with reason, fetch views (auto) or type views (manual).
 export default async function Videos({
@@ -83,39 +95,18 @@ export default async function Videos({
   searchParams: { status?: string; msg?: string };
 }) {
   const me = await pageStaff();
-  const asked =
-    searchParams.status === "APPROVED" ? "TRACKING" : searchParams.status; // old links
-  const tab = (TABS as readonly string[]).includes(asked ?? "")
-    ? (asked as (typeof TABS)[number])
+  const tab = (TABS as readonly string[]).includes(searchParams.status ?? "")
+    ? (searchParams.status as (typeof TABS)[number])
     : "PENDING";
-  const now = new Date();
   const isVideoTab = tab !== "REPOSTS";
-  const approvedTab = tab === "TRACKING" || tab === "COMPLETED";
-  const where: Prisma.VideoWhereInput =
-    tab === "PENDING"
-      ? { status: "PENDING" }
-      : tab === "REJECTED"
-        ? { status: "REJECTED" }
-        : tab === "TRACKING"
-          ? { status: "APPROVED", trackEndsAt: { gt: now } }
-          : { status: "APPROVED", trackEndsAt: { lte: now } };
-  const orderBy: Prisma.VideoOrderByWithRelationInput =
-    tab === "PENDING"
-      ? { createdAt: "asc" }
-      : tab === "TRACKING"
-        ? { trackEndsAt: "asc" }
-        : tab === "COMPLETED"
-          ? { trackEndsAt: "desc" }
-          : { createdAt: "desc" };
-
   const list = isVideoTab
     ? await db.video.findMany({
-        where,
+        where: { status: tab as "PENDING" },
         include: {
           blogger: { include: { agent: { include: { plan: true } } } },
           reviewedBy: true,
         },
-        orderBy,
+        orderBy: { createdAt: tab === "PENDING" ? "asc" : "desc" },
         take: 150,
       })
     : [];
@@ -126,29 +117,18 @@ export default async function Videos({
         take: 150,
       })
     : [];
-  const [counts, repostCount, nTrack, nDone] = await Promise.all([
+  const [counts, repostCount] = await Promise.all([
     db.video.groupBy({ by: ["status"], _count: { _all: true } }),
     db.repost.count(),
-    db.video.count({ where: { status: "APPROVED", trackEndsAt: { gt: now } } }),
-    db.video.count({
-      where: { status: "APPROVED", trackEndsAt: { lte: now } },
-    }),
   ]);
   const stats =
-    approvedTab && list.length
+    tab === "APPROVED" && list.length
       ? await db.videoStat.findMany({
           where: { videoId: { in: list.map((v) => v.id) } },
           orderBy: { day: "asc" },
         })
       : [];
-  const n = (t: (typeof TABS)[number]) =>
-    t === "REPOSTS"
-      ? repostCount
-      : t === "TRACKING"
-        ? nTrack
-        : t === "COMPLETED"
-          ? nDone
-          : (counts.find((c) => c.status === t)?._count._all ?? 0);
+  const n = (s: string) => counts.find((c) => c.status === s)?._count._all ?? 0;
   const open = (u: string) => (
     <a
       className="underline"
@@ -172,17 +152,23 @@ export default async function Videos({
     <>
       <h1 className="text-xl font-semibold">Videos</h1>
       {searchParams.msg && <p className="card text-sm">{searchParams.msg}</p>}
+<<<<<<< HEAD
       <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+=======
+      <div className="flex gap-4 text-sm">
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
         {TABS.map((t) => (
           <a
             key={t}
             href={`?status=${t}`}
             className={"underline " + (t === tab ? "font-bold" : "")}
           >
-            {LABEL[t]} ({n(t)})
+            {t[0] + t.slice(1).toLowerCase()} (
+            {t === "REPOSTS" ? repostCount : n(t)})
           </a>
         ))}
       </div>
+<<<<<<< HEAD
       {approvedTab && (
         <details className="card text-xs text-slate-600">
           <summary className="cursor-pointer text-sm font-medium">
@@ -224,6 +210,17 @@ export default async function Videos({
           hours. The submitted time is shown under each video.
         </p>
       )}
+=======
+      {tab === "APPROVED" && (
+        <form action={fetchAllAction}>
+          <button className="btn">Fetch views for all (auto)</button>{" "}
+          <span className="text-xs text-slate-500">
+            Tracking runs Mon to Saturday 11:59 PM of the submission week.
+            Payable views = what the blogger sees and is paid on.
+          </span>
+        </form>
+      )}
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
       <datalist id="reasons">
         {REASONS.map((r) => (
           <option key={r} value={r} />
@@ -239,7 +236,22 @@ export default async function Videos({
                 <th>Blogger / Agent</th>
                 <th>Platform</th>
                 <th>Video</th>
+<<<<<<< HEAD
                 {tab === "PENDING" ? <th>Moderate</th> : <th>Reviewed by</th>}
+=======
+                {tab === "PENDING" && <th>Moderate</th>}
+                {tab !== "PENDING" && <th>Reviewed by</th>}
+                {tab === "APPROVED" && (
+                  <>
+                    <th>Actual views (fetched)</th>
+                    <th>Likes</th>
+                    <th>Comments</th>
+                    <th>Adjusted views (paid on)</th>
+                    {me.role === "SUPER" && <th>Earned ₹</th>}
+                    <th>Update</th>
+                  </>
+                )}
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
                 {tab === "REJECTED" && <th>Reason</th>}
               </tr>
             </thead>
@@ -259,7 +271,10 @@ export default async function Videos({
                     <div className="text-xs text-slate-500 break-all">
                       {v.url.slice(0, 60)}
                     </div>
+<<<<<<< HEAD
                     <Timeline v={v} now={now} />
+=======
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
                     {owner(v)}
                   </td>
                   {tab === "PENDING" ? (
@@ -283,8 +298,123 @@ export default async function Videos({
                         <Btn className="btn-r">Reject</Btn>
                       </form>
                     </td>
+<<<<<<< HEAD
                   ) : (
                     <td>{v.reviewedBy?.name ?? "—"}</td>
+=======
+                  )}
+                  {tab !== "PENDING" && <td>{v.reviewedBy?.name ?? "—"}</td>}
+                  {tab === "APPROVED" && (
+                    <>
+                      <td>{fmt(v.liveViews)}</td>
+                      <td>{fmt(v.likes)}</td>
+                      <td>{fmt(v.comments)}</td>
+                      <td>
+                        <b>{fmt(v.views)}</b>
+                        {!v.viewsEdited &&
+                          v.views === 0 &&
+                          v.liveViews > 0 &&
+                          process.env.PAY_ONLY_ADJUSTED !== "false" && (
+                            <div className="text-xs text-amber-700">
+                              not adjusted yet, no pay
+                            </div>
+                          )}
+                        {v.viewsEdited && (
+                          <div className="text-xs text-amber-700">
+                            edited
+                            {v.views !== v.liveViews
+                              ? ` (live ${fmt(v.liveViews)})`
+                              : ""}
+                          </div>
+                        )}
+                        {v.frozen && (
+                          <div className="text-xs text-slate-500">
+                            tracking closed
+                          </div>
+                        )}
+                      </td>
+                      {me.role === "SUPER" && <td>{v.earnings.toString()}</td>}
+                      <td className="space-y-1">
+                        <div className="flex gap-1">
+                          <form action={fetchOneAction}>
+                            <input type="hidden" name="id" value={v.id} />
+                            <button className="btn">Fetch</button>
+                          </form>
+                          {v.viewsEdited && (
+                            <form action={resetToLiveAction}>
+                              <input type="hidden" name="id" value={v.id} />
+                              <button className="btn">Use live</button>
+                            </form>
+                          )}
+                        </div>
+                        <form action={setViews} className="space-y-1">
+                          <input type="hidden" name="id" value={v.id} />
+                          <label className="block text-xs text-slate-500">
+                            Adjusted views (paid on)
+                            <input
+                              name="views"
+                              type="number"
+                              min={0}
+                              defaultValue={
+                                v.viewsEdited || v.views ? v.views : v.liveViews
+                              }
+                              className="inp w-full"
+                            />
+                          </label>
+                          <label className="block text-xs text-slate-500">
+                            Likes
+                            <input
+                              name="likes"
+                              type="number"
+                              min={0}
+                              defaultValue={v.likes}
+                              className="inp w-full"
+                            />
+                          </label>
+                          <label className="block text-xs text-slate-500">
+                            Comments
+                            <input
+                              name="comments"
+                              type="number"
+                              min={0}
+                              defaultValue={v.comments}
+                              className="inp w-full"
+                            />
+                          </label>
+                          <button className="btn">Save</button>
+                        </form>
+                        <details>
+                          <summary className="text-xs underline cursor-pointer">
+                            7-day history
+                          </summary>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Date</th>
+                                <th>Live</th>
+                                <th>Payable</th>
+                                <th>Likes</th>
+                                <th>Comments</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {stats
+                                .filter((s) => s.videoId === v.id)
+                                .map((s) => (
+                                  <tr key={s.id}>
+                                    <td>{s.day.toISOString().slice(0, 10)}</td>
+                                    <td>{fmt(s.liveViews)}</td>
+                                    <td>{fmt(s.payViews)}</td>
+                                    <td>{fmt(s.likes)}</td>
+                                    <td>{fmt(s.comments)}</td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </details>
+                      </td>
+                    </>
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
                   )}
                   {tab === "REJECTED" && <td>{v.rejectReason}</td>}
                 </tr>

@@ -12,6 +12,7 @@ import {
   parseAccount,
 } from "./platforms";
 import { getVideoInfo } from "./providers";
+<<<<<<< HEAD
 import {
   submissionOpen,
   trackDay,
@@ -19,6 +20,9 @@ import {
   trackState,
   weekStartIST,
 } from "./week";
+=======
+import { submissionOpen, weekStartIST } from "./week";
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
 import { randomToken } from "./security";
 import { creditEligible } from "./commission";
 
@@ -231,15 +235,9 @@ export async function submitVideo(
         const match = accounts.find(
           (a) => a.ref && owners.has(a.ref.toLowerCase()),
         );
-        if (match) {
-          accountId = match.id;
-          verified = true;
-        } else if (
-          platform === "FACEBOOK" &&
-          process.env.STRICT_FACEBOOK_OWNER !== "true"
-        )
-          accountId = accounts.length === 1 ? accounts[0].id : null; // Facebook page names, links and ids often differ: accepted as "not verified" for the admin to check
-        else return { error: "e_notLinked" }; // video belongs to some other account
+        if (!match) return { error: "e_notLinked" }; // video belongs to some other account
+        accountId = match.id;
+        verified = true;
       } else if (process.env.STRICT_OWNER_CHECK === "true")
         return { error: "e_cantVerify" };
     }
@@ -253,8 +251,11 @@ export async function submitVideo(
         accountId,
         ownerVerified: verified,
         weekStart: weekStartIST(),
+<<<<<<< HEAD
         trackEndsAt: trackEnd(), // placeholder: replaced by approval time + 168 h when the admin approves
         submittedVia: via,
+=======
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
       },
     });
     return { ok: true, unverified: !verified };
@@ -373,6 +374,7 @@ export async function requestWithdrawal(
   }
 }
 
+<<<<<<< HEAD
 /** Timeline of one video (ISO timestamps; the app shows them in IST). Tracking = approval timestamp + exactly 168 hours. */
 const timeline = (
   v: {
@@ -397,6 +399,8 @@ const timeline = (
     done: state === "COMPLETED",
   };
 };
+=======
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
 const payRow = (w: any) => ({
   id: w.id,
   amount: num(w.amount),
@@ -421,8 +425,7 @@ export async function bloggerData(id: string) {
     where: { id },
     include: { agent: true },
   });
-  const now = new Date();
-  const [accounts, videos, pays, balance, agg, reposts, cnt, doneN] =
+  const [accounts, videos, pays, balance, agg, reposts, cnt] =
     await Promise.all([
       db.socialAccount.findMany({
         where: { bloggerId: id },
@@ -441,9 +444,9 @@ export async function bloggerData(id: string) {
       }),
       bloggerBalance(id),
       db.video.aggregate({
-        where: { bloggerId: id, status: "APPROVED", trackEndsAt: { lte: now } },
+        where: { bloggerId: id, status: "APPROVED" },
         _sum: { views: true },
-      }), // total views = videos whose 7 days are complete
+      }),
       db.repost.findMany({
         where: { bloggerId: id },
         orderBy: { createdAt: "desc" },
@@ -453,9 +456,6 @@ export async function bloggerData(id: string) {
         by: ["status"],
         where: { bloggerId: id },
         _count: { _all: true },
-      }),
-      db.video.count({
-        where: { bloggerId: id, status: "APPROVED", trackEndsAt: { lte: now } },
       }),
     ]);
   const c = (st: string) => cnt.find((x) => x.status === st)?._count._all ?? 0;
@@ -472,7 +472,6 @@ export async function bloggerData(id: string) {
     counts: {
       pending: c("PENDING"),
       approved: c("APPROVED"),
-      completed: doneN,
       rejected: c("REJECTED"),
     },
     accounts: accounts.map((a) => ({
@@ -491,7 +490,10 @@ export async function bloggerData(id: string) {
       url: v.url,
       status: v.status,
       reason: v.rejectReason,
+<<<<<<< HEAD
       ...timeline(v, now),
+=======
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
     })),
     reposts: reposts.map((r) => ({
       id: r.id,

@@ -7,14 +7,14 @@ const LIVE: ("PENDING" | "PROCESSING" | "PAID")[] = [
   "PAID",
 ]; // rejected payments return the money
 
-/** Blogger balance = earnings of approved videos whose 7 days are complete + admin adjustments - payments (not rejected). */
+/** Blogger balance = approved-video earnings + admin adjustments - payments (not rejected). */
 export async function bloggerBalance(
   id: string,
   c: Prisma.TransactionClient = db,
 ) {
   const [e, a, w] = await Promise.all([
     c.video.aggregate({
-      where: { bloggerId: id, status: "APPROVED", trackEndsAt: { lte: new Date() } }, // still tracking = not payable yet
+      where: { bloggerId: id, status: "APPROVED" },
       _sum: { earnings: true },
     }),
     c.adjustment.aggregate({

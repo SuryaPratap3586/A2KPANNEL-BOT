@@ -17,8 +17,11 @@ import { getAgentBonus } from "@/lib/settings";
 import { agentBalance } from "@/lib/balance";
 import { creditEligible } from "@/lib/commission";
 import { tgSend } from "@/lib/notify";
+<<<<<<< HEAD
 import { istDateTime, trackEnd } from "@/lib/week";
 import { TARGETS, Target, createBroadcast } from "@/lib/broadcast";
+=======
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
 
 const id = z.string().cuid();
 const pw = z
@@ -50,8 +53,12 @@ export async function reviewVideo(fd: FormData) {
       status: decision,
       rejectReason: reason,
       reviewedById: me.id,
+<<<<<<< HEAD
       reviewedAt: now,
       ...(decision === "APPROVED" ? { trackEndsAt: trackEnd(now) } : {}),
+=======
+      reviewedAt: new Date(),
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
     },
   });
   if (u.count === 1) {
@@ -102,14 +109,7 @@ export async function setViews(fd: FormData) {
       data: {
         ...(likes !== undefined ? { likes } : {}),
         ...(comments !== undefined ? { comments } : {}),
-        ...(!v.lastFetchedAt
-          ? {
-              liveViews: views,
-              ...(v.baseViews === null
-                ? { baseViews: 0, baseAt: new Date() }
-                : {}),
-            }
-          : {}),
+        ...(!v.lastFetchedAt ? { liveViews: views } : {}),
       },
     });
   }
@@ -169,7 +169,11 @@ export async function fetchOneAction(fd: FormData) {
   const r = await refreshVideo(id.parse(fd.get("id")), "FETCH", me.id);
   await log(me.email, "VIEWS_FETCH_ONE", r);
   back(
+<<<<<<< HEAD
     `/admin/videos?status=${r === "final" || r === "nobase" || r === "closed" ? "COMPLETED" : "TRACKING"}`,
+=======
+    "/admin/videos?status=APPROVED",
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
     {
       ok: "Actual views fetched (information only, no payment).",
       final:
@@ -191,10 +195,15 @@ export async function fetchAllAction() {
   const r = await fetchAll(me.id, 45_000);
   await log(me.email, "VIEWS_FETCH_ALL", `${r.updated}/${r.tried}`);
   back(
+<<<<<<< HEAD
     "/admin/videos?status=TRACKING",
     r.tried
       ? `Fetched ${r.updated} of ${r.tried} due videos.${r.remaining ? ` ${r.remaining} more are left, press again.` : ""} Videos without auto data need manual views.`
       : "Nothing is due: no video needs its starting or final views right now.",
+=======
+    "/admin/videos?status=APPROVED",
+    `Fetched ${r.updated} of ${r.tried} videos.${r.remaining ? ` ${r.remaining} more are left, press again.` : ""} Videos without auto data need manual views.`,
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
   );
 }
 
@@ -443,20 +452,9 @@ export async function setPayment(fd: FormData) {
     status === "REJECTED"
       ? z.string().trim().min(2).max(200).parse(fd.get("note"))
       : null;
-  // Allowed moves only. Complete and Rejected are final: bringing a rejected payment back would take the money again without a balance check.
-  const FROM: Record<typeof status, ("PENDING" | "PROCESSING")[]> = {
-    PENDING: ["PROCESSING"],
-    PROCESSING: ["PENDING"],
-    PAID: ["PENDING", "PROCESSING"],
-    REJECTED: ["PENDING", "PROCESSING"],
-  };
-  const u = await db.withdrawal.updateMany({
-    where: { id: wid, status: { in: FROM[status] } },
-    data: { status, note },
-  });
-  if (u.count !== 1) return revalidatePath("/admin/payments"); // already final, or changed by someone else at the same time
-  const w = await db.withdrawal.findUniqueOrThrow({
+  const w = await db.withdrawal.update({
     where: { id: wid },
+    data: { status, note },
     include: { blogger: true, agent: true },
   });
   await log(me.email, "PAYMENT_" + status, wid);
@@ -664,39 +662,23 @@ export async function createAgentPayout(fd: FormData) {
   const agentId = id.parse(fd.get("id"));
   const a = await db.agent.findUnique({ where: { id: agentId } });
   if (!a) back("/admin/agent-weekly", "Agent not found.");
+  await creditEligible({ agentId });
+  const due = Math.round((await agentBalance(agentId)) * 100) / 100;
+  if (due <= 0) back("/admin/agent-weekly", "Nothing is due for this agent.");
   if (!a!.bankDetails)
     back(
       "/admin/agent-weekly",
       "This agent has not saved payment details yet.",
     );
-  await creditEligible({ agentId });
-  // Serializable: a double click (or two admins) cannot create two payments for the same money
-  let due = 0;
-  try {
-    due = await db.$transaction(
-      async (tx) => {
-        const bal = Math.round((await agentBalance(agentId, tx)) * 100) / 100;
-        if (bal <= 0) return 0;
-        await tx.withdrawal.create({
-          data: {
-            agentId,
-            amount: bal,
-            details: a!.bankDetails!,
-            status: "PROCESSING",
-            note: "Weekly payment created by admin",
-          },
-        });
-        return bal;
-      },
-      { isolationLevel: "Serializable" },
-    );
-  } catch {
-    back(
-      "/admin/agent-weekly",
-      "Another payment for this agent was being created at the same moment. Refresh and check before trying again.",
-    );
-  }
-  if (due <= 0) back("/admin/agent-weekly", "Nothing is due for this agent.");
+  await db.withdrawal.create({
+    data: {
+      agentId,
+      amount: due,
+      details: a!.bankDetails!,
+      status: "PROCESSING",
+      note: "Weekly payment created by admin",
+    },
+  });
   await log(me.email, "AGENT_WEEKLY_PAYOUT", `${agentId} ${due}`);
   if (a!.telegramId)
     void tgSend(

@@ -305,10 +305,8 @@ export default function MiniApp() {
                   <Row k={t("totalViews")} v={num(d.views)} />
                   <Row k={t("pending")} v={d.counts.pending} />
                   <Row k={t("approved")} v={d.counts.approved} />
-                  <Row k={t("completedVideos")} v={d.counts.completed} />
                   <Row k={t("rejected")} v={d.counts.rejected} />
                   <Row k={t("yourAgent")} v={d.agent ?? t("noAgent")} />
-                  <p style={{ opacity: 0.7, fontSize: 12 }}>{t("viewsNote")}</p>
                   <p style={{ opacity: 0.7, fontSize: 12 }}>
                     {t("closedNote")}
                   </p>
@@ -363,6 +361,7 @@ export default function MiniApp() {
                     >
                       {v.url}
                     </div>
+<<<<<<< HEAD
                     {/* Timeline: submission, approval, 168-hour tracking window (IST) */}
                     <div
                       style={{
@@ -400,6 +399,8 @@ export default function MiniApp() {
                         </div>
                       )}
                     </div>
+=======
+>>>>>>> parent of 34ba41d (Track each video for its own 7 days and harden payments)
                     {v.status === "APPROVED" && !isB && (
                       <div style={{ fontSize: 13, marginTop: 4 }}>
                         {v.state === "COMPLETED" && v.eligibleViews === null ? (
